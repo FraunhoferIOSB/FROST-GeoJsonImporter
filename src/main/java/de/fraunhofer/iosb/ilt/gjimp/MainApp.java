@@ -22,7 +22,6 @@ import de.fraunhofer.iosb.ilt.sta.ServiceFailureException;
 import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URISyntaxException;
-import org.quartz.SchedulerException;
 
 /**
  *
@@ -36,9 +35,8 @@ public class MainApp {
 	 * @throws URISyntaxException
 	 * @throws java.net.MalformedURLException
 	 * @throws ServiceFailureException
-	 * @throws org.quartz.SchedulerException
 	 */
-	public static void main(String[] args) throws URISyntaxException, IOException, MalformedURLException, ServiceFailureException, SchedulerException {
+	public static void main(String[] args) throws URISyntaxException, IOException, MalformedURLException, ServiceFailureException {
 		GitVersionInfo.logGitInfo();
 		System.out.println("Trying to start the configuration GUI...");
 		ImporterGui.main(args);
