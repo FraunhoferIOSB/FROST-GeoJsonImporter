@@ -31,6 +31,7 @@ import de.fraunhofer.iosb.ilt.sta.service.SensorThingsService;
 import java.io.File;
 import java.io.IOException;
 import java.net.URL;
+import java.util.List;
 import java.util.ResourceBundle;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -63,13 +64,19 @@ public class GeoJsonImportController implements Initializable {
 	@FXML
 	private Button buttonLoad;
 	@FXML
+	private Button buttonNext;
+	@FXML
 	private Button buttonOpen;
+	@FXML
+	private Button buttonPrev;
 	@FXML
 	private Button buttonSave;
 	@FXML
 	private Button buttonImport;
 	@FXML
 	private Label labelFile;
+	@FXML
+	private Label labelShownFeature;
 	@FXML
 	private TextArea textAreaJson;
 	@FXML
@@ -84,6 +91,8 @@ public class GeoJsonImportController implements Initializable {
 	private ExecutorService executor = Executors.newFixedThreadPool(1);
 
 	private FeatureCollection collection;
+
+	private int shownFeature = 0;
 
 	@FXML
 	private void actionLoad(ActionEvent event) throws ConfigurationException {
@@ -117,14 +126,65 @@ public class GeoJsonImportController implements Initializable {
 			GeoJsonObject geoJsonObject = ObjectMapperFactory.get().readValue(json, GeoJsonObject.class);
 			if (geoJsonObject instanceof FeatureCollection) {
 				collection = (FeatureCollection) geoJsonObject;
-				Feature first = collection.getFeatures().get(0);
-				setInTextArea(first);
+				loadFeature(0);
 			} else {
 				textAreaJson.setText("File is not a FeatureCollection!");
 			}
 		} catch (JsonProcessingException ex) {
 			textAreaJson.setText("File is not a FeatureCollection!");
 		}
+	}
+
+	@FXML
+	private void actionButtonNext(ActionEvent event) throws ConfigurationException {
+		nextFeature();
+	}
+
+	@FXML
+	private void actionButtonPrev(ActionEvent event) throws ConfigurationException {
+		prevFeature();
+	}
+
+	private void nextFeature() {
+		if (collection == null) {
+			return;
+		}
+		shownFeature++;
+		if (shownFeature >= collection.getFeatures().size()) {
+			shownFeature = collection.getFeatures().size() - 1;
+		}
+		loadFeature(shownFeature);
+	}
+
+	private void prevFeature() {
+		if (collection == null) {
+			return;
+		}
+		shownFeature--;
+		if (shownFeature < 0) {
+			shownFeature = 0;
+		}
+		loadFeature(shownFeature);
+	}
+
+	private void loadFeature(int nr) {
+		if (collection == null) {
+			labelShownFeature.setText("0/0");
+			return;
+		}
+		List<Feature> features = collection.getFeatures();
+		if (features.isEmpty()) {
+			buttonNext.setDisable(true);
+			buttonPrev.setDisable(true);
+			labelShownFeature.setText("0/0");
+			return;
+		}
+		int count = features.size();
+		labelShownFeature.setText("" + nr + "/" + count);
+		buttonNext.setDisable(nr >= count);
+		buttonPrev.setDisable(nr <= 0);
+		Feature feature = features.get(nr);
+		setInTextArea(feature);
 	}
 
 	private String loadFromFile(String title, Label label) {
