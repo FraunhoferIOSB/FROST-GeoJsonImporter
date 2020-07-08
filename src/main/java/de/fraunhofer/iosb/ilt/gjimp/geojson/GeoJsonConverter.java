@@ -31,6 +31,7 @@ import de.fraunhofer.iosb.ilt.gjimp.utils.FrostUtils;
 import de.fraunhofer.iosb.ilt.gjimp.utils.JsonUtils;
 import de.fraunhofer.iosb.ilt.gjimp.utils.ProgressTracker;
 import de.fraunhofer.iosb.ilt.sta.ServiceFailureException;
+import de.fraunhofer.iosb.ilt.sta.Utils;
 import de.fraunhofer.iosb.ilt.sta.jackson.ObjectMapperFactory;
 import de.fraunhofer.iosb.ilt.sta.model.Location;
 import de.fraunhofer.iosb.ilt.sta.service.SensorThingsService;
@@ -42,6 +43,8 @@ import java.util.regex.Pattern;
 import org.apache.commons.lang3.StringUtils;
 import org.geojson.Feature;
 import org.geojson.FeatureCollection;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  *
@@ -49,6 +52,8 @@ import org.geojson.FeatureCollection;
  */
 @ConfigurableClass
 public class GeoJsonConverter implements AnnotatedConfigurable<SensorThingsService, Object> {
+
+	private static final Logger LOGGER = LoggerFactory.getLogger(GeoJsonConverter.class.getName());
 
 	private static final Pattern PLACE_HOLDER_PATTERN = Pattern.compile("\\{([a-zA-Z_0-9.-]+)(\\|([^}]+))?\\}");
 
@@ -78,6 +83,11 @@ public class GeoJsonConverter implements AnnotatedConfigurable<SensorThingsServi
 	@EditorClass.EdOptsClass(clazz = ObservationUploader.class)
 	private ObservationUploader uploader;
 
+	@ConfigurableField(editor = EditorString.class, optional = false,
+			label = "EqualsFilter", description = "Template used to generate the filter to check for duplicates, using {path.to.field|default} placeholders.")
+	@EditorString.EdOptsString(lines = 1, dflt = "name eq '{name|-}'")
+	private String templateFilter;
+
 	private SensorThingsService service;
 	private FrostUtils frostUtils;
 
@@ -103,18 +113,20 @@ public class GeoJsonConverter implements AnnotatedConfigurable<SensorThingsServi
 	}
 
 	public void importFeature(Feature feature) throws JsonProcessingException, ServiceFailureException {
-		String name = fillTemplate(templateName, feature);
-		String description = fillTemplate(templateDescription, feature);
-		String propertiesString = fillTemplate(templateProperties, feature);
+		String name = fillTemplate(templateName, feature, false);
+		String description = fillTemplate(templateDescription, feature, false);
+		String propertiesString = fillTemplate(templateProperties, feature, false);
 		Map<String, Object> properties = ObjectMapperFactory.get().readValue(propertiesString, JsonUtils.TYPE_MAP_STRING_OBJECT);
 
-		Location location = frostUtils.findOrCreateLocation(name, description, properties, feature.getGeometry());
+		String filter = fillTemplate(templateFilter, feature, true);
+		LOGGER.debug("Filter: {}", filter);
+		Location location = frostUtils.findOrCreateLocation(filter, name, description, properties, feature.getGeometry());
 		if (mirrorToThing) {
-			frostUtils.findOrCreateThing("", name, description, properties, location, null);
+			frostUtils.findOrCreateThing(filter, name, description, properties, location, null);
 		}
 	}
 
-	public static String fillTemplate(String template, Feature feature) {
+	public static String fillTemplate(String template, Feature feature, boolean forUrl) {
 		Matcher matcher = PLACE_HOLDER_PATTERN.matcher(template);
 		matcher.reset();
 		StringBuilder result = new StringBuilder();
@@ -122,14 +134,14 @@ public class GeoJsonConverter implements AnnotatedConfigurable<SensorThingsServi
 		while (matcher.find()) {
 			int start = matcher.start();
 			result.append(template.substring(pos, start));
-			result.append(findMatch(matcher.group(1), matcher.group(3), feature));
+			result.append(findMatch(matcher.group(1), matcher.group(3), feature, forUrl));
 			pos = matcher.end();
 		}
 		result.append(template.substring(pos));
 		return result.toString();
 	}
 
-	private static String findMatch(String path, String deflt, Feature source) {
+	private static String findMatch(String path, String deflt, Feature source, boolean forUrl) {
 		String[] parts = StringUtils.split(path, '.');
 		boolean first = true;
 		Object value = null;
@@ -166,7 +178,12 @@ public class GeoJsonConverter implements AnnotatedConfigurable<SensorThingsServi
 		if (value instanceof Map || value instanceof List) {
 			return deflt;
 		}
-		return StringUtils.replace(value.toString(), "\"", "\\\"");
+		if (forUrl) {
+			return Utils.escapeForStringConstant(value.toString());
+		}
+		String result = StringUtils.replace(value.toString(), "\"", "\\\"");
+		result = StringUtils.replace(value.toString(), "\n", "\\n");
+		return result;
 	}
 
 }
