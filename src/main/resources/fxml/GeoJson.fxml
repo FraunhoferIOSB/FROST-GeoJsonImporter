@@ -64,7 +64,26 @@
               <items>
                   <BorderPane>
                      <center>
-                        <TextArea fx:id="textAreaJson" prefHeight="200.0" prefWidth="200.0" BorderPane.alignment="CENTER" />
+                        <SplitPane dividerPositions="0.66" BorderPane.alignment="CENTER">
+                           <items>
+                              <BorderPane>
+                                 <center>
+                                    <TextArea fx:id="textAreaJson" editable="false" prefHeight="200.0" prefWidth="200.0" />
+                                 </center>
+                                 <top>
+                                    <Label text="Example GeoJSON Feature" BorderPane.alignment="CENTER" />
+                                 </top>
+                              </BorderPane>
+                              <BorderPane>
+                                 <center>
+                                    <TextArea fx:id="textAreaTestOutput" editable="false" prefHeight="200.0" prefWidth="200.0" />
+                                 </center>
+                                 <top>
+                                    <Label text="Test Output of Filters" BorderPane.alignment="CENTER" />
+                                 </top>
+                              </BorderPane>
+                           </items>
+                        </SplitPane>
                      </center>
                      <left>
                         <VBox alignment="TOP_CENTER" BorderPane.alignment="CENTER">

@@ -27,20 +27,26 @@ import de.fraunhofer.iosb.ilt.configurable.editor.EditorBoolean;
 import de.fraunhofer.iosb.ilt.configurable.editor.EditorClass;
 import de.fraunhofer.iosb.ilt.configurable.editor.EditorString;
 import de.fraunhofer.iosb.ilt.gjimp.ObservationUploader;
+import de.fraunhofer.iosb.ilt.gjimp.utils.EntityCache;
 import de.fraunhofer.iosb.ilt.gjimp.utils.FrostUtils;
+import static de.fraunhofer.iosb.ilt.gjimp.utils.FrostUtils.ENCODING_GEOJSON;
 import de.fraunhofer.iosb.ilt.gjimp.utils.JsonUtils;
 import de.fraunhofer.iosb.ilt.gjimp.utils.ProgressTracker;
 import de.fraunhofer.iosb.ilt.sta.ServiceFailureException;
 import de.fraunhofer.iosb.ilt.sta.Utils;
 import de.fraunhofer.iosb.ilt.sta.jackson.ObjectMapperFactory;
 import de.fraunhofer.iosb.ilt.sta.model.Location;
+import de.fraunhofer.iosb.ilt.sta.model.Thing;
 import de.fraunhofer.iosb.ilt.sta.service.SensorThingsService;
+import java.lang.reflect.InvocationTargetException;
 import java.net.URLDecoder;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.lang3.reflect.MethodUtils;
 import org.geojson.Feature;
 import org.geojson.FeatureCollection;
 import org.slf4j.Logger;
@@ -84,12 +90,24 @@ public class GeoJsonConverter implements AnnotatedConfigurable<SensorThingsServi
 	private ObservationUploader uploader;
 
 	@ConfigurableField(editor = EditorString.class, optional = false,
-			label = "EqualsFilter", description = "Template used to generate the filter to check for duplicates, using {path.to.field|default} placeholders.")
+			label = "EqualsFilter", description = "Template used to generate the filter to check for duplicates, using {path.to.field|default} placeholders. Template runs against the new Entity!")
 	@EditorString.EdOptsString(lines = 1, dflt = "name eq '{name|-}'")
-	private String templateFilter;
+	private String templateEqualsFilter;
+
+	@ConfigurableField(editor = EditorString.class, optional = false,
+			label = "CacheFilter", description = "Filter used to load the cache.")
+	@EditorString.EdOptsString(lines = 1, dflt = "properties/type eq 'NUTS'")
+	private String cacheFilter;
+
+	@ConfigurableField(editor = EditorString.class, optional = false,
+			label = "CacheKey", description = "Template used to generate the key used to cache, using {path.to.field|default} placeholders. Template runs against the new Entity!")
+	@EditorString.EdOptsString(lines = 1, dflt = "{properties/type}-{properties/nutsId}")
+	private String templateCacheKey;
 
 	private SensorThingsService service;
 	private FrostUtils frostUtils;
+	private EntityCache<String, Thing> cacheThings;
+	private EntityCache<String, Location> cacheLocations;
 
 	@Override
 	public void configure(JsonElement config, SensorThingsService context, Object edtCtx, ConfigEditor<?> configEditor) throws ConfigurationException {
@@ -98,7 +116,50 @@ public class GeoJsonConverter implements AnnotatedConfigurable<SensorThingsServi
 		frostUtils = new FrostUtils(service);
 	}
 
+	public String generateTestOutput(Feature feature) {
+		String name = fillTemplate(templateName, feature, false);
+		String description = fillTemplate(templateDescription, feature, false);
+		String propertiesString = fillTemplate(templateProperties, feature, false);
+
+		Map<String, Object> properties;
+		try {
+			properties = ObjectMapperFactory.get().readValue(propertiesString, JsonUtils.TYPE_MAP_STRING_OBJECT);
+			propertiesString = ObjectMapperFactory.get().writeValueAsString(properties);
+		} catch (JsonProcessingException ex) {
+			propertiesString = "Failed to parse json: " + ex.getMessage();
+			properties = new HashMap<>();
+		}
+
+		Location newLocation = new Location(name, description, ENCODING_GEOJSON, feature.getGeometry());
+		newLocation.setProperties(properties);
+
+		String equalsFilter = fillTemplate(templateEqualsFilter, newLocation, true);
+		String cacheKey = fillTemplate(templateCacheKey, newLocation, false);
+
+		StringBuilder output = new StringBuilder();
+		output.append("Name: ").append(name).append('\n')
+				.append("Description: ").append(description).append('\n')
+				.append("Properties: ").append(propertiesString).append('\n')
+				.append('\n')
+				.append("Equals Filter: ").append(equalsFilter).append('\n')
+				.append("Cache Key: ").append(cacheKey).append('\n');
+
+		return output.toString();
+	}
+
 	public void importAll(FeatureCollection collection, ProgressTracker tracker) {
+		cacheThings = new EntityCache<>(
+				entity -> fillTemplate(templateCacheKey, entity, false),
+				entity -> entity.getName());
+		cacheLocations = new EntityCache<>(
+				entity -> fillTemplate(templateCacheKey, entity, false),
+				entity -> entity.getName());
+		try {
+			cacheLocations.load(service.locations(), cacheFilter, "id,name,description,properties,encodingType,location", "");
+			cacheThings.load(service.things(), cacheFilter, "id,name,description,properties", "Locations($select=id)");
+		} catch (ServiceFailureException ex) {
+			LOGGER.error("Failed to load the Cache.", ex);
+		}
 		List<Feature> features = collection.getFeatures();
 		int total = features.size();
 		int count = 0;
@@ -118,15 +179,23 @@ public class GeoJsonConverter implements AnnotatedConfigurable<SensorThingsServi
 		String propertiesString = fillTemplate(templateProperties, feature, false);
 		Map<String, Object> properties = ObjectMapperFactory.get().readValue(propertiesString, JsonUtils.TYPE_MAP_STRING_OBJECT);
 
-		String filter = fillTemplate(templateFilter, feature, true);
+		Location newLocation = new Location(name, description, ENCODING_GEOJSON, feature.getGeometry());
+		newLocation.setProperties(properties);
+
+		String cacheKey = fillTemplate(templateCacheKey, newLocation, false);
+		Location cachedLocation = cacheLocations.get(cacheKey);
+
+		String filter = fillTemplate(templateEqualsFilter, newLocation, true);
 		LOGGER.debug("Filter: {}", filter);
-		Location location = frostUtils.findOrCreateLocation(filter, name, description, properties, feature.getGeometry());
+		Location location = frostUtils.findOrCreateLocation(filter, newLocation, cachedLocation);
 		if (mirrorToThing) {
-			frostUtils.findOrCreateThing(filter, name, description, properties, location, null);
+			Thing cachedThing = cacheThings.get(cacheKey);
+			Thing newThing = FrostUtils.buildThing(name, description, properties, location);
+			frostUtils.findOrCreateThing(filter, newThing, cachedThing);
 		}
 	}
 
-	public static String fillTemplate(String template, Feature feature, boolean forUrl) {
+	public static String fillTemplate(String template, Object feature, boolean forUrl) {
 		Matcher matcher = PLACE_HOLDER_PATTERN.matcher(template);
 		matcher.reset();
 		StringBuilder result = new StringBuilder();
@@ -141,49 +210,46 @@ public class GeoJsonConverter implements AnnotatedConfigurable<SensorThingsServi
 		return result.toString();
 	}
 
-	private static String findMatch(String path, String deflt, Feature source, boolean forUrl) {
+	private static String findMatch(String path, String deflt, Object source, boolean forUrl) {
 		String[] parts = StringUtils.split(path, '.');
-		boolean first = true;
-		Object value = null;
+		Object value = source;
 		for (String part : parts) {
 			part = URLDecoder.decode(part, JsonUtils.UTF_8);
-			if (first) {
-				if ("id".equalsIgnoreCase(part)) {
-					value = source.getId();
-				} else if ("properties".equalsIgnoreCase(part)) {
-					value = source.getProperties();
-				}
-				first = false;
-			} else {
-				if (value instanceof Map) {
-					Map<String, Object> map = (Map) value;
-					value = map.get(part);
-				} else if (value instanceof List) {
-					List list = (List) value;
-					try {
-						Integer idx = Integer.valueOf(part);
-						value = list.get(idx);
-					} catch (NumberFormatException ex) {
-						return deflt;
-					}
-				} else {
-					// value is not a map, but we expect a map...
-					return deflt;
-				}
+			value = getFrom(part, value);
+			if (value == null) {
+				return deflt;
 			}
 		}
-		if (value == null) {
-			return deflt;
-		}
-		if (value instanceof Map || value instanceof List) {
+		if (value instanceof Map || value instanceof List || value == null) {
 			return deflt;
 		}
 		if (forUrl) {
 			return Utils.escapeForStringConstant(value.toString());
 		}
 		String result = StringUtils.replace(value.toString(), "\"", "\\\"");
-		result = StringUtils.replace(value.toString(), "\n", "\\n");
+		result = StringUtils.replace(result, "\n", "\\n");
 		return result;
 	}
 
+	private static Object getFrom(String field, Object source) {
+		if (source instanceof Map) {
+			Map map = (Map) source;
+			return map.get(field);
+		} else if (source instanceof List) {
+			List list = (List) source;
+			try {
+				Integer idx = Integer.valueOf(field);
+				return list.get(idx);
+			} catch (NumberFormatException ex) {
+				return null;
+			}
+		}
+		String getterName = "get" + field.substring(0, 1).toUpperCase() + field.substring(1);
+		try {
+			return MethodUtils.invokeMethod(source, getterName);
+		} catch (NoSuchMethodException | IllegalAccessException | InvocationTargetException ex) {
+			LOGGER.trace("Failed to execute getter {} on {}", getterName, source, ex);
+			return null;
+		}
+	}
 }

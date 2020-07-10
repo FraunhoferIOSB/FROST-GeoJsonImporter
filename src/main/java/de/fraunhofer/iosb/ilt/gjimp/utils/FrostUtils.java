@@ -25,6 +25,7 @@ import de.fraunhofer.iosb.ilt.sta.jackson.ObjectMapperFactory;
 import de.fraunhofer.iosb.ilt.sta.model.Datastream;
 import de.fraunhofer.iosb.ilt.sta.model.Entity;
 import de.fraunhofer.iosb.ilt.sta.model.FeatureOfInterest;
+import de.fraunhofer.iosb.ilt.sta.model.Id;
 import de.fraunhofer.iosb.ilt.sta.model.Location;
 import de.fraunhofer.iosb.ilt.sta.model.MultiDatastream;
 import de.fraunhofer.iosb.ilt.sta.model.ObservedProperty;
@@ -118,19 +119,29 @@ public final class FrostUtils {
 		}
 	}
 
-	public Thing findOrCreateThing(
-			final String filter,
+	public static Thing buildThing(
 			final String name,
 			final String description,
 			final Map<String, Object> properties,
-			final Location location,
+			final Location location) {
+		Thing thing = new Thing(name, description);
+		thing.setProperties(properties);
+		if (location != null) {
+			thing.getLocations().add(location.withOnlyId());
+		}
+		return thing;
+	}
+
+	public Thing findOrCreateThing(
+			final String filter,
+			final Thing newThing,
 			final Thing cachedThing) throws ServiceFailureException {
 		Thing thing = null;
 		if (cachedThing != null) {
 			thing = cachedThing;
 		} else {
 			EntityList<Thing> thingList;
-			thingList = addOrCreateFilter(service.things().query(), filter, name).expand("Locations($select=id)").list();
+			thingList = addOrCreateFilter(service.things().query(), filter, newThing.getName()).expand("Locations($select=id)").list();
 			if (thingList.size() > 1) {
 				throw new IllegalStateException("More than one thing found with filter " + filter);
 			}
@@ -139,61 +150,65 @@ public final class FrostUtils {
 			}
 		}
 		if (thing == null) {
-			LOGGER.info("Creating Thing {}.", name);
-			thing = new Thing(name, description);
-			thing.setProperties(properties);
-			if (location != null) {
-				thing.getLocations().add(location.withOnlyId());
-			}
+			LOGGER.info("Creating Thing {}.", newThing.getName());
+			thing = newThing;
 			create(thing);
 		} else {
-			maybeUpdateThing(name, description, properties, location, thing);
+			maybeUpdateThing(newThing, thing);
 		}
 		return thing;
 	}
 
 	public boolean maybeUpdateThing(
-			final String name,
-			final String description,
-			final Map<String, Object> properties,
-			final Location location,
-			final Thing cached) throws ServiceFailureException {
+			final Thing updatedThing,
+			final Thing cachedThing) throws ServiceFailureException {
 		boolean updated = false;
-		if (!name.equals(cached.getName())) {
+		if (!updatedThing.getName().equals(cachedThing.getName())) {
 			updated = true;
-			cached.setName(name);
+			cachedThing.setName(updatedThing.getName());
 		}
-		if (!description.equals(cached.getDescription())) {
+		if (!updatedThing.getDescription().equals(cachedThing.getDescription())) {
 			updated = true;
-			cached.setDescription(description);
+			cachedThing.setDescription(updatedThing.getDescription());
 		}
-		if (addProperties(cached.getProperties(), properties, 5)) {
+		if (addProperties(cachedThing.getProperties(), updatedThing.getProperties(), 5)) {
 			updated = true;
 		}
-		if (location != null) {
-			final List<Location> locationList = cached.getLocations().toList();
-			if (locationList.isEmpty()) {
-				cached.getLocations().add(location.withOnlyId());
+		if (updatedThing.getLocations() != null) {
+			final List<Location> cachedList = cachedThing.getLocations().toList();
+			final List<Location> updatedList = updatedThing.getLocations().toList();
+			if (!entityListsEqual(cachedList, updatedList)) {
+				cachedThing.getLocations().clear();
+				for (Location location : updatedThing.getLocations()) {
+					cachedThing.getLocations().add(location.withOnlyId());
+				}
 				updated = true;
-			} else {
-				boolean found = false;
-				for (Location loc : locationList) {
-					if (loc.getId().equals(location.getId())) {
-						found = true;
-						break;
-					}
-				}
-				if (!found) {
-					cached.getLocations().clear();
-					cached.getLocations().add(location.withOnlyId());
-					updated = true;
-				}
 			}
 		}
 		if (updated) {
-			update(cached);
+			update(cachedThing);
 		}
 		return updated;
+	}
+
+	public static <T extends Entity<T>> boolean entityListsEqual(List<T> first, List<T> second) {
+		if (first.size() != second.size()) {
+			return false;
+		}
+		for (T firstItem : first) {
+			Id firstId = firstItem.getId();
+			boolean found = false;
+			for (T secondItem : second) {
+				if (firstId.equals(secondItem.getId())) {
+					found = true;
+					break;
+				}
+			}
+			if (!found) {
+				return false;
+			}
+		}
+		return true;
 	}
 
 	public Sensor findOrCreateSensor(
@@ -540,29 +555,31 @@ public final class FrostUtils {
 	}
 
 	public Location findOrCreateLocation(
-			final String name,
-			final String description,
-			final Map<String, Object> properties,
-			final GeoJsonObject geoJson) throws ServiceFailureException {
-		String filter = "name eq '" + Utils.escapeForStringConstant(name) + "'";
-		return findOrCreateLocation(filter, name, description, properties, geoJson);
-	}
-
-	public Location findOrCreateLocation(
-			final String filter,
-			final String name,
-			final String description,
-			final Map<String, Object> properties,
-			final GeoJsonObject geoJson) throws ServiceFailureException {
-		return findOrCreateLocation(filter, name, description, properties, geoJson, null);
-	}
-
-	public Location findOrCreateLocation(
 			final String filter,
 			final String name,
 			final String description,
 			final Map<String, Object> properties,
 			final GeoJsonObject geoJson,
+			final Location cached) throws ServiceFailureException {
+		Location newLocation = new Location(name, description, ENCODING_GEOJSON, geoJson);
+		newLocation.setProperties(properties);
+		return findOrCreateLocation(filter, newLocation, cached);
+	}
+
+	/**
+	 *
+	 * @param filter The filter to use to find the location in the server.
+	 * @param newLocation The new version of the Location, created for the
+	 * import.
+	 * @param cached The cached version of the Location as loaded from the
+	 * server, or null.
+	 * @return The (updated) cached location, the (updated) location as loaded
+	 * from the server, or the given (updated) newLocation.
+	 * @throws ServiceFailureException
+	 */
+	public Location findOrCreateLocation(
+			final String filter,
+			final Location newLocation,
 			final Location cached) throws ServiceFailureException {
 		Location location = null;
 		if (cached != null) {
@@ -577,46 +594,42 @@ public final class FrostUtils {
 			}
 		}
 		if (location == null) {
-			LOGGER.info("Creating Location {}.", name);
-			location = new Location(name, description, ENCODING_GEOJSON, geoJson);
-			location.setProperties(properties);
+			LOGGER.info("Creating Location {}.", newLocation.getName());
+			location = newLocation;
 			create(location);
 		} else {
-			maybeUpdateLocation(name, description, properties, geoJson, location);
+			maybeUpdateLocation(newLocation, location);
 		}
 		return location;
 	}
 
 	public boolean maybeUpdateLocation(
-			final String name,
-			final String description,
-			final Map<String, Object> properties,
-			final GeoJsonObject geoJson,
-			final Location cached) throws ServiceFailureException {
+			final Location updatedLocation,
+			final Location cachedLocation) throws ServiceFailureException {
 		boolean updated = false;
-		if (!cached.getName().equals(name)) {
+		if (!cachedLocation.getName().equals(updatedLocation.getName())) {
 			updated = true;
-			cached.setName(name);
+			cachedLocation.setName(updatedLocation.getName());
 		}
-		if (!cached.getDescription().equals(description)) {
+		if (!cachedLocation.getDescription().equals(updatedLocation.getDescription())) {
 			updated = true;
-			cached.setDescription(description);
+			cachedLocation.setDescription(updatedLocation.getDescription());
 		}
-		if (addProperties(cached.getProperties(), properties, 10)) {
+		if (addProperties(cachedLocation.getProperties(), updatedLocation.getProperties(), 10)) {
 			updated = true;
 		}
 		ObjectMapper om = ObjectMapperFactory.get();
 		try {
-			if (!om.writeValueAsString(geoJson).equals(om.writeValueAsString(cached.getLocation()))) {
+			if (!om.writeValueAsString(updatedLocation.getLocation()).equals(om.writeValueAsString(cachedLocation.getLocation()))) {
 				updated = true;
-				LOGGER.debug("Location changed from {} to {}", cached.getLocation(), geoJson);
-				cached.setLocation(geoJson);
+				LOGGER.debug("Location changed from {} to {}", cachedLocation.getLocation(), updatedLocation.getLocation());
+				cachedLocation.setLocation(updatedLocation.getLocation());
 			}
 		} catch (JsonProcessingException ex) {
 			LOGGER.error("Failed to compare geoJson objects.");
 		}
 		if (updated) {
-			update(cached);
+			update(cachedLocation);
 		}
 		return updated;
 	}

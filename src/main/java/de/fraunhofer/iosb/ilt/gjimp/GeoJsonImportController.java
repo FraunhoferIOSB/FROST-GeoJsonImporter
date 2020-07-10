@@ -80,6 +80,8 @@ public class GeoJsonImportController implements Initializable {
 	@FXML
 	private TextArea textAreaJson;
 	@FXML
+	private TextArea textAreaTestOutput;
+	@FXML
 	private CheckBox toggleNoAct;
 	@FXML
 	private ProgressBar progressBar;
@@ -185,6 +187,7 @@ public class GeoJsonImportController implements Initializable {
 		buttonPrev.setDisable(nr <= 0);
 		Feature feature = features.get(nr);
 		setInTextArea(feature);
+		textAreaTestOutput.setText(generateTestOutput(feature));
 	}
 
 	private String loadFromFile(String title, Label label) {
@@ -221,6 +224,18 @@ public class GeoJsonImportController implements Initializable {
 		} catch (JsonProcessingException ex) {
 			textAreaJson.setText(ex.getMessage());
 		}
+	}
+
+	private String generateTestOutput(Feature feature) {
+		EditorClass<SensorThingsService, Object, GeoJsonConverter> importer = new EditorClass<>(new SensorThingsService(), null, GeoJsonConverter.class);
+		importer.setConfig(editor.getConfig());
+		try {
+			return importer.getValue().generateTestOutput(feature);
+		} catch (ConfigurationException ex) {
+			LOGGER.error("Exception", ex);
+			return "Failed to create importer: " + ex.getMessage();
+		}
+
 	}
 
 	@FXML
