@@ -57,8 +57,19 @@ public class EntityCache<U, T extends Entity<T>> {
 		return entitiesByLocalId.containsKey(localId);
 	}
 
-	public void put(U localId, T entity) {
-		entitiesByLocalId.put(localId, entity);
+	public void put(T entity) {
+		try {
+			U localId = localIdExtractor.extractFrom(entity);
+			if (localId != null) {
+				entitiesByLocalId.put(localId, entity);
+			}
+		} catch (RuntimeException ex) {
+			// probably no localId, ignore.
+		}
+		if (nameExtractor != null) {
+			String name = nameExtractor.extractFrom(entity);
+			entitiesByName.put(name, entity);
+		}
 	}
 
 	public boolean isEmpty() {
@@ -85,19 +96,8 @@ public class EntityCache<U, T extends Entity<T>> {
 		int count = 0;
 		while (it.hasNext()) {
 			T entitiy = it.next();
-			try {
-				U localId = localIdExtractor.extractFrom(entitiy);
-				if (localId != null) {
-					entitiesByLocalId.put(localId, entitiy);
-					count++;
-				}
-			} catch (RuntimeException ex) {
-				// probably no localId, ignore.
-			}
-			if (nameExtractor != null) {
-				String name = nameExtractor.extractFrom(entitiy);
-				entitiesByName.put(name, entitiy);
-			}
+			put(entitiy);
+			count++;
 		}
 		return count;
 	}

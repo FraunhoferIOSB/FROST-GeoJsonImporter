@@ -135,7 +135,8 @@ public final class FrostUtils {
 	public Thing findOrCreateThing(
 			final String filter,
 			final Thing newThing,
-			final Thing cachedThing) throws ServiceFailureException {
+			final Thing cachedThing,
+			final boolean keepLocations) throws ServiceFailureException {
 		Thing thing = null;
 		if (cachedThing != null) {
 			thing = cachedThing;
@@ -154,14 +155,15 @@ public final class FrostUtils {
 			thing = newThing;
 			create(thing);
 		} else {
-			maybeUpdateThing(newThing, thing);
+			maybeUpdateThing(newThing, thing, keepLocations);
 		}
 		return thing;
 	}
 
 	public boolean maybeUpdateThing(
 			final Thing updatedThing,
-			final Thing cachedThing) throws ServiceFailureException {
+			final Thing cachedThing,
+			final boolean keepLocations) throws ServiceFailureException {
 		boolean updated = false;
 		if (!updatedThing.getName().equals(cachedThing.getName())) {
 			updated = true;
@@ -175,14 +177,23 @@ public final class FrostUtils {
 			updated = true;
 		}
 		if (updatedThing.getLocations() != null) {
-			final List<Location> cachedList = cachedThing.getLocations().toList();
-			final List<Location> updatedList = updatedThing.getLocations().toList();
-			if (!entityListsEqual(cachedList, updatedList)) {
-				cachedThing.getLocations().clear();
-				for (Location location : updatedThing.getLocations()) {
-					cachedThing.getLocations().add(location.withOnlyId());
+			if (keepLocations) {
+				for (Location location : updatedThing.getLocations().toList()) {
+					if (!entityListsContains(cachedThing.getLocations().toList(), location)) {
+						cachedThing.getLocations().add(location.withOnlyId());
+						updated = true;
+					}
 				}
-				updated = true;
+			} else {
+				final List<Location> cachedList = cachedThing.getLocations().toList();
+				final List<Location> updatedList = updatedThing.getLocations().toList();
+				if (!entityListsEqual(cachedList, updatedList)) {
+					cachedThing.getLocations().clear();
+					for (Location location : updatedThing.getLocations()) {
+						cachedThing.getLocations().add(location.withOnlyId());
+					}
+					updated = true;
+				}
 			}
 		}
 		if (updated) {
@@ -209,6 +220,15 @@ public final class FrostUtils {
 			}
 		}
 		return true;
+	}
+
+	public static <T extends Entity<T>> boolean entityListsContains(List<T> list, T find) {
+		for (T entry : list) {
+			if (entry.getId().equals(find.getId())) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	public Sensor findOrCreateSensor(

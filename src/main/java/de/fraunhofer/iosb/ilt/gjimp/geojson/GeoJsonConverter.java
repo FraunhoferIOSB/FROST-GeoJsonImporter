@@ -23,24 +23,18 @@ import de.fraunhofer.iosb.ilt.configurable.ConfigEditor;
 import de.fraunhofer.iosb.ilt.configurable.ConfigurationException;
 import de.fraunhofer.iosb.ilt.configurable.annotations.ConfigurableClass;
 import de.fraunhofer.iosb.ilt.configurable.annotations.ConfigurableField;
-import de.fraunhofer.iosb.ilt.configurable.editor.EditorBoolean;
 import de.fraunhofer.iosb.ilt.configurable.editor.EditorClass;
-import de.fraunhofer.iosb.ilt.configurable.editor.EditorString;
 import de.fraunhofer.iosb.ilt.gjimp.ObservationUploader;
-import de.fraunhofer.iosb.ilt.gjimp.utils.EntityCache;
 import de.fraunhofer.iosb.ilt.gjimp.utils.FrostUtils;
-import static de.fraunhofer.iosb.ilt.gjimp.utils.FrostUtils.ENCODING_GEOJSON;
 import de.fraunhofer.iosb.ilt.gjimp.utils.JsonUtils;
 import de.fraunhofer.iosb.ilt.gjimp.utils.ProgressTracker;
 import de.fraunhofer.iosb.ilt.sta.ServiceFailureException;
 import de.fraunhofer.iosb.ilt.sta.Utils;
-import de.fraunhofer.iosb.ilt.sta.jackson.ObjectMapperFactory;
 import de.fraunhofer.iosb.ilt.sta.model.Location;
 import de.fraunhofer.iosb.ilt.sta.model.Thing;
 import de.fraunhofer.iosb.ilt.sta.service.SensorThingsService;
 import java.lang.reflect.InvocationTargetException;
 import java.net.URLDecoder;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
@@ -63,51 +57,23 @@ public class GeoJsonConverter implements AnnotatedConfigurable<SensorThingsServi
 
 	private static final Pattern PLACE_HOLDER_PATTERN = Pattern.compile("\\{([a-zA-Z_0-9.-]+)(\\|([^}]+))?\\}");
 
-	@ConfigurableField(editor = EditorBoolean.class, optional = false,
-			label = "Copy to Thing", description = "Create a Thing for each Location that has all the properties of the Location")
-	@EditorBoolean.EdOptsBool(dflt = true)
-	private boolean mirrorToThing;
-
-	@ConfigurableField(editor = EditorString.class, optional = false,
-			label = "Name Template", description = "Template used to generate the name, using {path.to.field|default} placeholders.")
-	@EditorString.EdOptsString(lines = 1)
-	private String templateName;
-
-	@ConfigurableField(editor = EditorString.class, optional = false,
-			label = "Description Template", description = "Template used to generate the description, using {path.to.field|default} placeholders.")
-	@EditorString.EdOptsString(lines = 3)
-	private String templateDescription;
-
-	@ConfigurableField(editor = EditorString.class, optional = false,
-			label = "Properties Template", description = "Template used to generate the properties, using {path.to.field|default} placeholders.")
-	@EditorString.EdOptsString(lines = 4)
-	private String templateProperties;
-
 	@ConfigurableField(editor = EditorClass.class, optional = false,
-			label = "SensorThingsService", description = "The STA service to upload the Locations & Things to"
-	)
+			label = "SensorThingsService", description = "The STA service to upload the Locations & Things to")
 	@EditorClass.EdOptsClass(clazz = ObservationUploader.class)
 	private ObservationUploader uploader;
 
-	@ConfigurableField(editor = EditorString.class, optional = false,
-			label = "EqualsFilter", description = "Template used to generate the filter to check for duplicates, using {path.to.field|default} placeholders. Template runs against the new Entity!")
-	@EditorString.EdOptsString(lines = 1, dflt = "name eq '{name|-}'")
-	private String templateEqualsFilter;
+	@ConfigurableField(editor = EditorClass.class, optional = false,
+			label = "Locations", description = "The definition of how to create Locations.")
+	@EditorClass.EdOptsClass(clazz = CreatorLocation.class)
+	private CreatorLocation creatorLocations;
 
-	@ConfigurableField(editor = EditorString.class, optional = false,
-			label = "CacheFilter", description = "Filter used to load the cache.")
-	@EditorString.EdOptsString(lines = 1, dflt = "properties/type eq 'NUTS'")
-	private String cacheFilter;
-
-	@ConfigurableField(editor = EditorString.class, optional = false,
-			label = "CacheKey", description = "Template used to generate the key used to cache, using {path.to.field|default} placeholders. Template runs against the new Entity!")
-	@EditorString.EdOptsString(lines = 1, dflt = "{properties/type}-{properties/nutsId}")
-	private String templateCacheKey;
+	@ConfigurableField(editor = EditorClass.class, optional = true,
+			label = "Things", description = "The definition of how to create Things.")
+	@EditorClass.EdOptsClass(clazz = CreatorThing.class)
+	private CreatorThing creatorThings;
 
 	private SensorThingsService service;
 	private FrostUtils frostUtils;
-	private EntityCache<String, Thing> cacheThings;
-	private EntityCache<String, Location> cacheLocations;
 
 	@Override
 	public void configure(JsonElement config, SensorThingsService context, Object edtCtx, ConfigEditor<?> configEditor) throws ConfigurationException {
@@ -117,49 +83,17 @@ public class GeoJsonConverter implements AnnotatedConfigurable<SensorThingsServi
 	}
 
 	public String generateTestOutput(Feature feature) {
-		String name = fillTemplate(templateName, feature, false);
-		String description = fillTemplate(templateDescription, feature, false);
-		String propertiesString = fillTemplate(templateProperties, feature, false);
-
-		Map<String, Object> properties;
-		try {
-			properties = ObjectMapperFactory.get().readValue(propertiesString, JsonUtils.TYPE_MAP_STRING_OBJECT);
-			propertiesString = ObjectMapperFactory.get().writeValueAsString(properties);
-		} catch (JsonProcessingException ex) {
-			propertiesString = "Failed to parse json: " + ex.getMessage();
-			properties = new HashMap<>();
-		}
-
-		Location newLocation = new Location(name, description, ENCODING_GEOJSON, feature.getGeometry());
-		newLocation.setProperties(properties);
-
-		String equalsFilter = fillTemplate(templateEqualsFilter, newLocation, true);
-		String cacheKey = fillTemplate(templateCacheKey, newLocation, false);
-
-		StringBuilder output = new StringBuilder();
-		output.append("Name: ").append(name).append('\n')
-				.append("Description: ").append(description).append('\n')
-				.append("Properties: ").append(propertiesString).append('\n')
+		return new StringBuilder()
+				.append(creatorLocations.generateTestOutput(feature))
 				.append('\n')
-				.append("Equals Filter: ").append(equalsFilter).append('\n')
-				.append("Cache Key: ").append(cacheKey).append('\n');
-
-		return output.toString();
+				.append(creatorThings.generateTestOutput(feature))
+				.toString();
 	}
 
 	public void importAll(FeatureCollection collection, ProgressTracker tracker) {
-		cacheThings = new EntityCache<>(
-				entity -> fillTemplate(templateCacheKey, entity, false),
-				entity -> entity.getName());
-		cacheLocations = new EntityCache<>(
-				entity -> fillTemplate(templateCacheKey, entity, false),
-				entity -> entity.getName());
-		try {
-			cacheLocations.load(service.locations(), cacheFilter, "id,name,description,properties,encodingType,location", "");
-			cacheThings.load(service.things(), cacheFilter, "id,name,description,properties", "Locations($select=id)");
-		} catch (ServiceFailureException ex) {
-			LOGGER.error("Failed to load the Cache.", ex);
-		}
+		creatorLocations.loadCache(tracker);
+		creatorThings.loadCache(tracker);
+
 		List<Feature> features = collection.getFeatures();
 		int total = features.size();
 		int count = 0;
@@ -174,25 +108,8 @@ public class GeoJsonConverter implements AnnotatedConfigurable<SensorThingsServi
 	}
 
 	public void importFeature(Feature feature) throws JsonProcessingException, ServiceFailureException {
-		String name = fillTemplate(templateName, feature, false);
-		String description = fillTemplate(templateDescription, feature, false);
-		String propertiesString = fillTemplate(templateProperties, feature, false);
-		Map<String, Object> properties = ObjectMapperFactory.get().readValue(propertiesString, JsonUtils.TYPE_MAP_STRING_OBJECT);
-
-		Location newLocation = new Location(name, description, ENCODING_GEOJSON, feature.getGeometry());
-		newLocation.setProperties(properties);
-
-		String cacheKey = fillTemplate(templateCacheKey, newLocation, false);
-		Location cachedLocation = cacheLocations.get(cacheKey);
-
-		String filter = fillTemplate(templateEqualsFilter, newLocation, true);
-		LOGGER.debug("Filter: {}", filter);
-		Location location = frostUtils.findOrCreateLocation(filter, newLocation, cachedLocation);
-		if (mirrorToThing) {
-			Thing cachedThing = cacheThings.get(cacheKey);
-			Thing newThing = FrostUtils.buildThing(name, description, properties, location);
-			frostUtils.findOrCreateThing(filter, newThing, cachedThing);
-		}
+		Location location = creatorLocations.createLocation(feature, frostUtils);
+		Thing thing = creatorThings.createThing(feature, location, frostUtils);
 	}
 
 	public static String fillTemplate(String template, Object feature, boolean forUrl) {
