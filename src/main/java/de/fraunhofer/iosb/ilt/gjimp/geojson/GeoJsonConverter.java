@@ -34,7 +34,6 @@ import de.fraunhofer.iosb.ilt.sta.model.Location;
 import de.fraunhofer.iosb.ilt.sta.model.Thing;
 import de.fraunhofer.iosb.ilt.sta.service.SensorThingsService;
 import java.lang.reflect.InvocationTargetException;
-import java.net.URLDecoder;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
@@ -55,7 +54,7 @@ public class GeoJsonConverter implements AnnotatedConfigurable<SensorThingsServi
 
 	private static final Logger LOGGER = LoggerFactory.getLogger(GeoJsonConverter.class.getName());
 
-	private static final Pattern PLACE_HOLDER_PATTERN = Pattern.compile("\\{([a-zA-Z_0-9.-]+)(\\|([^}]+))?\\}");
+	private static final Pattern PLACE_HOLDER_PATTERN = Pattern.compile("\\{([a-zA-Z_0-9./~-]+)(\\|([^}]+))?\\}");
 
 	@ConfigurableField(editor = EditorClass.class, optional = false,
 			label = "SensorThingsService", description = "The STA service to upload the Locations & Things to")
@@ -128,10 +127,10 @@ public class GeoJsonConverter implements AnnotatedConfigurable<SensorThingsServi
 	}
 
 	private static String findMatch(String path, String deflt, Object source, boolean forUrl) {
-		String[] parts = StringUtils.split(path, '.');
+		String[] parts = StringUtils.split(path, '/');
 		Object value = source;
 		for (String part : parts) {
-			part = URLDecoder.decode(part, JsonUtils.UTF_8);
+			part = JsonUtils.DecodeJsonPointer(part);
 			value = getFrom(part, value);
 			if (value == null) {
 				return deflt;
