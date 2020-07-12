@@ -42,32 +42,27 @@ public class AuthPostCookie implements AnnotatedConfigurable<Void, Void>, AuthMe
 	private static final org.slf4j.Logger LOGGER = LoggerFactory.getLogger(AuthPostCookie.class);
 
 	@ConfigurableField(editor = EditorString.class,
-			label = "PostUrl",
-			description = "The url to post to, use placeholders {username} and {password} for username and password.",
+			label = "PostUrl", description = "The url to post to, use placeholders {username} and {password} for username and password.",
 			optional = false
 	)
 	@EditorString.EdOptsString(dflt = "https://example.org/servlet/is/rest/login?user={username}&key={password}")
 	private String postUrl;
 
 	@ConfigurableField(editor = EditorString.class,
-			label = "Username",
-			description = "The username to use for authentication",
+			label = "Username", description = "The username to use for authentication",
 			optional = false
 	)
 	@EditorString.EdOptsString()
 	private String username;
 
 	@ConfigurableField(editor = EditorPassword.class,
-			label = "Password",
-			description = "The password to use for authentication",
+			label = "Password", description = "The password to use for authentication",
 			optional = false)
 	@EditorPassword.EdOptsPassword()
 	private String password;
 
-	@ConfigurableField(editor = EditorBoolean.class,
-			label = "IgnoreSslErrors",
-			description = "Ignore SSL certificate errors. This is a bad idea unless you know what you are doing.",
-			optional = true)
+	@ConfigurableField(editor = EditorBoolean.class, optional = true,
+			label = "IgnoreSslErrors", description = "Ignore SSL certificate errors. This is a bad idea unless you know what you are doing.")
 	@EditorBoolean.EdOptsBool()
 	private boolean ignoreSslErrors;
 

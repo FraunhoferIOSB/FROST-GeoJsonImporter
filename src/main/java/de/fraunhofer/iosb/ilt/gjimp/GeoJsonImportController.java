@@ -41,7 +41,6 @@ import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
-import javafx.scene.control.CheckBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.ProgressBar;
 import javafx.scene.control.ScrollPane;
@@ -81,8 +80,6 @@ public class GeoJsonImportController implements Initializable {
 	private TextArea textAreaJson;
 	@FXML
 	private TextArea textAreaTestOutput;
-	@FXML
-	private CheckBox toggleNoAct;
 	@FXML
 	private ProgressBar progressBar;
 

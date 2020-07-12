@@ -66,7 +66,7 @@ public class CreatorThing implements AnnotatedConfigurable<SensorThingsService, 
 	@EditorString.EdOptsString(lines = 3)
 	private String templateDescription;
 
-	@ConfigurableField(editor = EditorString.class, optional = false,
+	@ConfigurableField(editor = EditorString.class, optional = true,
 			label = "Properties Template", description = "Template used to generate the properties, using {path.to.field|default} placeholders.")
 	@EditorString.EdOptsString(lines = 4)
 	private String templateProperties;
@@ -104,13 +104,15 @@ public class CreatorThing implements AnnotatedConfigurable<SensorThingsService, 
 		String description = fillTemplate(templateDescription, feature, false);
 		String propertiesString = fillTemplate(templateProperties, feature, false);
 
-		Map<String, Object> properties;
-		try {
-			properties = ObjectMapperFactory.get().readValue(propertiesString, JsonUtils.TYPE_MAP_STRING_OBJECT);
-			propertiesString = ObjectMapperFactory.get().writeValueAsString(properties);
-		} catch (JsonProcessingException ex) {
-			propertiesString = "Failed to parse json: " + ex.getMessage();
-			properties = new HashMap<>();
+		Map<String, Object> properties = null;
+		if (!propertiesString.trim().isEmpty()) {
+			try {
+				properties = ObjectMapperFactory.get().readValue(propertiesString, JsonUtils.TYPE_MAP_STRING_OBJECT);
+				propertiesString = ObjectMapperFactory.get().writeValueAsString(properties);
+			} catch (JsonProcessingException ex) {
+				propertiesString = "Failed to parse json: " + ex.getMessage();
+				properties = new HashMap<>();
+			}
 		}
 
 		Location newLocation = new Location(name, description, ENCODING_GEOJSON, feature.getGeometry());
@@ -125,6 +127,7 @@ public class CreatorThing implements AnnotatedConfigurable<SensorThingsService, 
 				.append("  Properties: ").append(propertiesString).append('\n')
 				.append('\n')
 				.append("  Equals Filter: ").append(equalsFilter).append('\n')
+				.append("  Cache Load Filter: ").append(cacheFilter).append('\n')
 				.append("  Cache Key: ").append(cacheKey).append('\n');
 
 		return output.toString();

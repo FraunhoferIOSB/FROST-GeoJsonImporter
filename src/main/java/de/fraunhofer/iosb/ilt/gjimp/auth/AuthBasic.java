@@ -50,20 +50,17 @@ public class AuthBasic implements AnnotatedConfigurable<Void, Void>, AuthMethod 
 	private static final org.slf4j.Logger LOGGER = LoggerFactory.getLogger(AuthBasic.class);
 
 	@ConfigurableField(editor = EditorString.class,
-			label = "Username",
-			description = "The username to use for authentication")
+			label = "Username", description = "The username to use for authentication")
 	@EditorString.EdOptsString()
 	private String username;
 
 	@ConfigurableField(editor = EditorPassword.class,
-			label = "Password",
-			description = "The password to use for authentication")
+			label = "Password", description = "The password to use for authentication")
 	@EditorPassword.EdOptsPassword()
 	private String password;
 
-	@ConfigurableField(editor = EditorBoolean.class,
-			label = "IgnoreSslErrors",
-			description = "Ignore SSL certificate errors. This is a bad idea unless you know what you are doing.")
+	@ConfigurableField(editor = EditorBoolean.class, optional = true,
+			label = "IgnoreSslErrors", description = "Ignore SSL certificate errors. This is a bad idea unless you know what you are doing.")
 	@EditorBoolean.EdOptsBool()
 	private boolean ignoreSslErrors;
 

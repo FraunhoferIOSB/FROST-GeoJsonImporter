@@ -31,14 +31,12 @@ import org.apache.http.impl.client.CloseableHttpClient;
 public class AuthHeader implements AnnotatedConfigurable<Void, Void>, AuthMethod {
 
 	@ConfigurableField(editor = EditorString.class,
-			label = "Header Name",
-			description = "The name of the authentication header to use.")
+			label = "Header Name", description = "The name of the authentication header to use.")
 	@EditorString.EdOptsString()
 	private String headerName;
 
 	@ConfigurableField(editor = EditorString.class,
-			label = "Header Value",
-			description = "The value of the authentication header to use.")
+			label = "Header Value", description = "The value of the authentication header to use.")
 	@EditorString.EdOptsString()
 	private String headerValue;
 

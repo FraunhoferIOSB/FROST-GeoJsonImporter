@@ -62,14 +62,13 @@ public class ObservationUploader implements AnnotatedConfigurable<SensorThingsSe
 	@EditorString.EdOptsString(dflt = "http://localhost:8080/FROST-Server/v1.0")
 	private String serviceUrl;
 
-	@ConfigurableField(editor = EditorSubclass.class,
-			label = "Auth Method", description = "The authentication method the service uses.",
-			optional = true)
+	@ConfigurableField(editor = EditorSubclass.class, optional = true,
+			label = "Auth Method", description = "The authentication method the service uses.")
 	@EditorSubclass.EdOptsSubclass(
 			iface = AuthMethod.class)
 	private AuthMethod authMethod;
 
-	@ConfigurableField(editor = EditorBoolean.class,
+	@ConfigurableField(editor = EditorBoolean.class, optional = true,
 			label = "Use DataArrays",
 			description = "Use the SensorThingsAPI DataArray extension to post Observations. "
 			+ "This is much more efficient when posting many observations. "

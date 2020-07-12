@@ -50,11 +50,6 @@
                 <RowConstraints minHeight="10.0" prefHeight="30.0" vgrow="SOMETIMES" />
               </rowConstraints>
                <children>
-                  <CheckBox fx:id="toggleNoAct" mnemonicParsing="false" selected="true" text="Dry Run" GridPane.columnIndex="1">
-                     <GridPane.margin>
-                        <Insets right="5.0" />
-                     </GridPane.margin>
-                  </CheckBox>
                   <Button fx:id="buttonImport" mnemonicParsing="false" onAction="#actionImport" text="Import" GridPane.columnIndex="2" />
                </children>
             </GridPane>
