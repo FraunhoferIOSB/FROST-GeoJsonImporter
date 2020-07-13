@@ -8,6 +8,9 @@
 	<packaging>jar</packaging>
 
 	<name>FROST-GeoJsonImporter</name>
+	<description>A tool to turn GeoJSON Feature Collections into SensorThings API Locations &amp; Things.</description>
+	<url>https://github.com/hylkevds/FROST-GeoJsonImporter</url>
+	<inceptionYear>2020</inceptionYear>
 
 	<properties>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -33,6 +36,42 @@
 	<organization>
 		<name>Fraunhofer IOSB</name>
 	</organization>
+
+	<scm>
+		<url>https://github.com/hylkevds/FROST-GeoJsonImporter</url>
+		<connection>scm:git:git@github.com:hylkevds/FROST-GeoJsonImporter.git</connection>
+		<developerConnection>scm:git:git@github.com:hylkevds/FROST-GeoJsonImporter.git</developerConnection>
+		<tag>HEAD</tag>
+	</scm>
+
+	<issueManagement>
+		<system>GitHub</system>
+		<url>https://github.com/hylkevds/FROST-GeoJsonImporter/issues</url>
+	</issueManagement>
+
+	<distributionManagement>
+		<repository>
+			<id>fraunhoferiosb-Maven</id>
+			<url>https://api.bintray.com/maven/${bintray.subject}/${bintray.repo}/${bintray.package}/;publish=1</url>
+		</repository>
+	</distributionManagement>
+
+
+	<repositories>
+		<repository>
+			<id>bintray-fraunhoferiosb-Maven</id>
+			<url>https://dl.bintray.com/fraunhoferiosb/Maven</url>
+			<releases>
+				<enabled>true</enabled>
+			</releases>
+		</repository>
+		<repository>
+			<id>osgeo</id>
+			<name>Open Source Geospatial Foundation Repository</name>
+			<url>https://repo.osgeo.org/repository/release/</url>
+		</repository>
+	</repositories>
+
 	<build>
 		<plugins>
 			<plugin>
@@ -91,24 +130,6 @@
 		</plugins>
 	</build>
 
-	<repositories>
-		<repository>
-			<id>bintray-fraunhoferiosb-Maven</id>
-			<url>https://dl.bintray.com/fraunhoferiosb/Maven</url>
-			<releases>
-				<enabled>true</enabled>
-			</releases>
-			<snapshots>
-				<enabled>false</enabled>
-			</snapshots>
-		</repository>
-		<repository>
-			<id>osgeo</id>
-			<name>Open Source Geospatial Foundation Repository</name>
-			<url>https://repo.osgeo.org/repository/release/</url>
-		</repository>
-	</repositories>
-
 	<dependencies>
 		<dependency>
 			<groupId>${project.groupId}</groupId>
@@ -144,16 +165,6 @@
 			<groupId>org.openjfx</groupId>
 			<artifactId>javafx-controls</artifactId>
 			<version>${openjfx.version}</version>
-		</dependency>
-		<dependency>
-			<groupId>org.geotools</groupId>
-			<artifactId>gt-referencing</artifactId>
-			<version>${geotools.version}</version>
-		</dependency>
-		<dependency>
-			<groupId>org.geotools</groupId>
-			<artifactId>gt-epsg-hsql</artifactId>
-			<version>${geotools.version}</version>
 		</dependency>
 		<dependency>
 			<groupId>junit</groupId>

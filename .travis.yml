@@ -1,0 +1,22 @@
+language: java
+jdk:
+  - openjdk11
+
+branches:
+  only:
+    - master
+    - "/^v[0-9]+\\.[0-9]+/"
+
+after_success:
+  - test "${TRAVIS_PULL_REQUEST}" == "false" && test "${TRAVIS_TAG}" != "" && mvn deploy --settings travis-settings.xml
+
+cache:
+  directories:
+    - '$HOME/.m2/repository'
+
+env:
+  global:
+  # travis encrypt BINTRAY_USER=[username]
+  - secure: "O/renNfc3YfQeAY4fZeLRsV0AO/rnzIlOvQN5A8V0tq+6+TC4aMpg9DRY7ITvSrSSNe3hOEQ3mNrrHAFTGqfdMTFMo1e6g6iIbNg9TuT8cjYze1eXHJcsbjhtDkYS3ZCQYOEv6kKsRsc5AHYUPr8U9/bHIdkjSdfTNJu8ySL1PgR+JFHhtIqg9tGE+pEXeCijzv0WFPkw7vpPN7fE5ZKEIy/ZtQH2e4z6RN5n6cpuutZcgoYOJPFe88/nm8hL7R+VaZIkG0sgTd2nhMM9n7U/bOlbnatCEzn7GB9FSy+8L5OuBvzMBiYuLzSbgfwTZh03xeJ6o8ySqoNoMeDcYp/I6h55kARXtvsL54eECkgY3XkHMaAwxFSUz+y5eAYcVejlkeGSigJFa7Py64vNfD9qCG+rikNMZJ3uzEqCQtXb/pT4fsDY2DWoSdGbV+RS9+M/OjtDkrpIzib2AO18iJBfJdjHcVXErGrbMAtcaj18TUDVW0QGq88rUaJr3T24AvvBwCIeEUxk/J2Krdzwh2MsC+bu7XxvylZmtskJVeYsJImjXayXPzmh/FNN17QFv1YPvzQJHoQf1hiYiJswKBMi8g0ZdOf3treUjIzCObznRl9u3MfA3/fGEmZ46PaqgRVZV6V/0Z13AnQc+48DFyqJ5tsWK/aQ6YbTZy3BHncg5Q="
+  # travis encrypt BINTRAY_API_KEY=[api key]
+  - secure: "QHZEQ+yogfsbIJm8/UbqNxXT35xWU43v4Uf9macYq8XRJQbmNrXDUC/1ZKFq1g1+I5kSQNn7mGDHDsfBI6NKsVxfBV+/oF6uEMmm9/HS3qFB+rhvG/egYzNDauR8/UKPa8udx40o32uqfVAg07+6eo4zLE6fq8Ga7ODIj+23WSUwnJZzQgOYHNaVBPvW4B/LDai3m3hC6k8abteal+OfkejLnf5kOv67YwiK1zwcWMoB+x60arh5hnScnUyh5oUsvQji339wGSr9ujiKZtFav5Cr+nh1t6laxZdv+G+kS+L+JSCML5SiJcvsx6C3hmEiWkpcuvezi/ZmO8PVa1bxXFQRy534/biDpLJYARfjFpZQFBwTHtyjuFcxR5MOZOTVe9RZv+Y89Y9jGKxMUxYYXinGjdmIKtzReu5rFzTDDZQZUtMr1pTD/rYMy5MXFqjdpRoXT572BccoIdD0hcWGc09kqQ2L+095HjWynZPtmkrPtxfh5VmagUPil89V+MDFQYBkgujwcxdntPs1dePtuRrr/I4/k2C/szI75K2ZJTLWnyWTrYznJxzWncsLSOnkCBzAqSjiePdB5LaQ0fO5Bqr/NNHDWUzj3WnL5zI5dJhly/gQJYJRJwLrmbxa0wgbvstmHleb3zUKZhTl0zOanaIlCbADTcxxg8gPjxXTSc4="

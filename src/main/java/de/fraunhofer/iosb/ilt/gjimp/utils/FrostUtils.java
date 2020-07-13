@@ -18,7 +18,6 @@ package de.fraunhofer.iosb.ilt.gjimp.utils;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import de.fraunhofer.iosb.ilt.gjimp.ImportException;
 import de.fraunhofer.iosb.ilt.sta.ServiceFailureException;
 import de.fraunhofer.iosb.ilt.sta.Utils;
 import de.fraunhofer.iosb.ilt.sta.jackson.ObjectMapperFactory;
@@ -51,14 +50,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import org.geojson.GeoJsonObject;
-import org.geojson.Point;
-import org.geotools.geometry.DirectPosition2D;
-import org.geotools.referencing.CRS;
-import org.opengis.geometry.MismatchedDimensionException;
-import org.opengis.referencing.FactoryException;
-import org.opengis.referencing.crs.CoordinateReferenceSystem;
-import org.opengis.referencing.operation.MathTransform;
-import org.opengis.referencing.operation.TransformException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.threeten.extra.Interval;
@@ -859,35 +850,6 @@ public final class FrostUtils {
 		final Instant instantEnd = ZonedDateTime.parse(end).toInstant();
 		final Interval interval = Interval.of(instantStart, instantEnd);
 		return new TimeObject(interval);
-	}
-
-	public static Point convertCoordinates(Point point, String locationSrsName) throws ImportException {
-		try {
-			CoordinateReferenceSystem sourceCrs = CRS.decode(locationSrsName);
-			CoordinateReferenceSystem targetCrs = CRS.decode("EPSG:4326");
-			MathTransform transform = CRS.findMathTransform(sourceCrs, targetCrs);
-			DirectPosition2D sourcePoint = new DirectPosition2D(
-					sourceCrs,
-					point.getCoordinates().getLongitude(),
-					point.getCoordinates().getLatitude());
-			DirectPosition2D targetPoint = new DirectPosition2D(targetCrs);
-			transform.transform(sourcePoint, targetPoint);
-			return new Point(targetPoint.x, targetPoint.y);
-		} catch (FactoryException | MismatchedDimensionException | TransformException ex) {
-			LOGGER.error("Failed to convert coordinates: {}", ex.getMessage());
-			throw new ImportException(ex);
-		}
-	}
-
-	public static DirectPosition2D convertCoordinates(String locationPos, String locationSrsName) throws FactoryException, TransformException, NumberFormatException, MismatchedDimensionException {
-		String[] coordinates = locationPos.split(" ");
-		CoordinateReferenceSystem sourceCrs = CRS.decode(locationSrsName);
-		CoordinateReferenceSystem targetCrs = CRS.decode("EPSG:4326");
-		MathTransform transform = CRS.findMathTransform(sourceCrs, targetCrs);
-		DirectPosition2D sourcePoint = new DirectPosition2D(sourceCrs, Double.parseDouble(coordinates[1]), Double.parseDouble(coordinates[0]));
-		DirectPosition2D targetPoint = new DirectPosition2D(targetCrs);
-		transform.transform(sourcePoint, targetPoint);
-		return targetPoint;
 	}
 
 	public static Map<String, Object> putIntoSubMap(Map<String, Object> map, String subMapName, String key, Object value) {
