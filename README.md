@@ -46,3 +46,34 @@ For the other templates, the path is relative to the newly created entity.
 If any of the fields in the path contain the `~` character, encode it as `~0`.
 If any of the fields in the path contain the `/` character, encode it as `~1`.
 
+## Example Configuration
+
+The following configuration can be used to import NUTS regions as distributed by
+[Eurostat](https://ec.europa.eu/eurostat/de/web/gisco/geodata/reference-data/administrative-units-statistical-units/nuts).
+
+```
+{
+  "creatorThings": {
+    "cacheFilter": "properties/type eq 'NUTS'",
+    "keepLocations": true,
+    "templateName": "{properties/NUTS_NAME}",
+    "templateProperties": "{\n  \"type\": \"NUTS\",\n  \"level\": {properties/LEVL_CODE},\n  \"countryCode\": \"{properties/CNTR_CODE}\",\n  \"nutsId\": \"{id}\",\n  \"nutsName\": \"{properties/NUTS_NAME}\",\n  \"nutsNameLatin\": \"{properties/NAME_LATN}\",\n  \"source\": \"https://ec.europa.eu/eurostat/de/web/gisco/geodata/reference-data/administrative-units-statistical-units/nuts\"\n}",
+    "templateDescription": "NUTS region {id}: {properties/NUTS_NAME}",
+    "templateEqualsFilter": "properties/type eq 'NUTS' and properties/nutsId eq '{properties/nutsId}'",
+    "templateCacheKey": "{properties/type}-{properties/nutsId}"
+  },
+  "creatorLocations": {
+    "cacheFilter": "properties/type eq 'NUTS' and properties/resolution eq 10",
+    "templateName": "{properties/NUTS_ID}",
+    "templateProperties": "{\n  \"type\": \"NUTS\",\n  \"level\": {properties/LEVL_CODE},\n  \"resolution\": 10,\n  \"countryCode\": \"{properties/CNTR_CODE}\",\n  \"nutsId\": \"{id}\",\n  \"nutsName\": \"{properties/NUTS_NAME}\",\n  \"nutsNameLatin\": \"{properties/NAME_LATN}\",\n  \"source\": \"https://ec.europa.eu/eurostat/de/web/gisco/geodata/reference-data/administrative-units-statistical-units/nuts\"\n}",
+    "templateDescription": "NUTS region {id}: {properties/NUTS_NAME}",
+    "templateEqualsFilter": "properties/type eq '{properties/type}' and properties/nutsId eq '{properties/nutsId}' and properties/resolution eq {properties/resolution}",
+    "templateCacheKey": "{properties/type}-{properties/nutsId}"
+  },
+  "uploader": {
+    "serviceUrl": "http://localhost:8080/FROST-Server/v1.1"
+  }
+}
+```
+
+You should set the `resolution` property in the properties and EqualsFilter template of the Location to the resolution of the GeoJSON you are importing.
