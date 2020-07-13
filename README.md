@@ -9,6 +9,10 @@ Start the application by running (or double-clicking the jar):
 java -jar FROST-GeoJsonImporter-0.1-shaded.jar
 ```
 
+## Download
+
+[FROST-GeoJsonImporter-0.1-shaded.jar](https://dl.bintray.com/fraunhoferiosb/Maven/de/fraunhofer/iosb/ilt/FROST-GeoJsonImporter/0.1/FROST-GeoJsonImporter-0.1-shaded.jar)
+
 
 ## Manual
 
@@ -23,6 +27,7 @@ The GeoJSON Importer takes a GeoJSON file containing a Feature collection, parse
    1. If the Entity is found in the Cache or directly on the server, the version loaded from the cache/server is updated, stored in the cache, and sent to the server.
    2. If the Entity is not found on the server, the new Entity is sent to the server, and added to the cache.
 6. After the Location is created, a Thing is created, linked to the Location and steps 3 to 5 are repeated for the Thing.
+
 
 ### User Interface
 
