@@ -188,6 +188,7 @@ public final class FrostUtils {
 			}
 		}
 		if (updated) {
+			LOGGER.info("Updating Thing {}.", cachedThing.getName());
 			update(cachedThing);
 		}
 		return updated;
@@ -640,6 +641,7 @@ public final class FrostUtils {
 			LOGGER.error("Failed to compare geoJson objects.");
 		}
 		if (updated) {
+			LOGGER.info("Updating Location {}.", cachedLocation.getName());
 			update(cachedLocation);
 		}
 		return updated;
