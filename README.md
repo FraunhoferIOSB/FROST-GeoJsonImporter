@@ -68,11 +68,11 @@ The following configuration can be used to import NUTS regions as distributed by
     "templateCacheKey": "{properties/type}-{properties/nutsId}"
   },
   "creatorLocations": {
-    "cacheFilter": "properties/type eq 'NUTS' and properties/resolution eq 10",
+    "cacheFilter": "properties/type eq 'NUTS' and properties/scale eq 10",
     "templateName": "{properties/NUTS_ID}",
-    "templateProperties": "{\n  \"type\": \"NUTS\",\n  \"level\": {properties/LEVL_CODE},\n  \"resolution\": 10,\n  \"countryCode\": \"{properties/CNTR_CODE}\",\n  \"nutsId\": \"{id}\",\n  \"nutsName\": \"{properties/NUTS_NAME}\",\n  \"nutsNameLatin\": \"{properties/NAME_LATN}\",\n  \"source\": \"https://ec.europa.eu/eurostat/de/web/gisco/geodata/reference-data/administrative-units-statistical-units/nuts\"\n}",
+    "templateProperties": "{\n  \"type\": \"NUTS\",\n  \"level\": {properties/LEVL_CODE},\n  \"scale\": 10,\n  \"countryCode\": \"{properties/CNTR_CODE}\",\n  \"nutsId\": \"{id}\",\n  \"nutsName\": \"{properties/NUTS_NAME}\",\n  \"nutsNameLatin\": \"{properties/NAME_LATN}\",\n  \"source\": \"https://ec.europa.eu/eurostat/de/web/gisco/geodata/reference-data/administrative-units-statistical-units/nuts\"\n}",
     "templateDescription": "NUTS region {id}: {properties/NUTS_NAME}",
-    "templateEqualsFilter": "properties/type eq '{properties/type}' and properties/nutsId eq '{properties/nutsId}' and properties/resolution eq {properties/resolution}",
+    "templateEqualsFilter": "properties/type eq '{properties/type}' and properties/nutsId eq '{properties/nutsId}' and properties/scale eq {properties/scale}",
     "templateCacheKey": "{properties/type}-{properties/nutsId}"
   },
   "uploader": {
@@ -81,4 +81,4 @@ The following configuration can be used to import NUTS regions as distributed by
 }
 ```
 
-You should set the `resolution` property in the properties and EqualsFilter template of the Location to the resolution of the GeoJSON you are importing.
+You should set the `scale` property in the properties and EqualsFilter template of the Location to the scale of the GeoJSON you are importing.
