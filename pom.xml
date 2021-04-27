@@ -23,7 +23,7 @@
 		<bintray.repo>Maven</bintray.repo>
 		<bintray.package>FROST-GeoJsonImporter</bintray.package>
 
-		<FROST-Client.version>0.32</FROST-Client.version>
+		<FROST-Client.version>0.34</FROST-Client.version>
 		<commons-collections.version>4.1</commons-collections.version>
 		<commons-io.version>2.7</commons-io.version>
 		<configurable.version>0.23</configurable.version>
