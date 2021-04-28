@@ -29,7 +29,7 @@
 		<configurable.version>0.30</configurable.version>
 		<dockerfile-maven-plugin.version>1.4.13</dockerfile-maven-plugin.version>
 		<geotools.version>22.2</geotools.version>
-		<git-commit-id-plugin.version>4.0.0</git-commit-id-plugin.version>
+		<git-commit-id-plugin.version>4.0.4</git-commit-id-plugin.version>
 		<javax-activation.version>1.1.1</javax-activation.version>
 		<junit.version>4.13.1</junit.version>
 		<logback.version>1.2.3</logback.version>
