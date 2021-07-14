@@ -25,7 +25,7 @@
 
 		<FROST-Client.version>0.35</FROST-Client.version>
 		<commons-collections.version>4.4</commons-collections.version>
-		<commons-io.version>2.10.0</commons-io.version>
+		<commons-io.version>2.11.0</commons-io.version>
 		<configurable.version>0.30</configurable.version>
 		<dockerfile-maven-plugin.version>1.4.13</dockerfile-maven-plugin.version>
 		<geotools.version>22.2</geotools.version>
