@@ -50,12 +50,12 @@ import org.slf4j.LoggerFactory;
  * @author scf
  */
 @ConfigurableClass
-public class ObservationUploader implements AnnotatedConfigurable<SensorThingsService, Object> {
+public class StaService implements AnnotatedConfigurable<SensorThingsService, Object> {
 
 	/**
 	 * The logger for this class.
 	 */
-	private static final Logger LOGGER = LoggerFactory.getLogger(ObservationUploader.class);
+	private static final Logger LOGGER = LoggerFactory.getLogger(StaService.class);
 
 	@ConfigurableField(editor = EditorString.class,
 			label = "Service URL", description = "The url of the server to import into.")

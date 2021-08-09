@@ -24,7 +24,7 @@ import de.fraunhofer.iosb.ilt.configurable.ConfigurationException;
 import de.fraunhofer.iosb.ilt.configurable.annotations.ConfigurableClass;
 import de.fraunhofer.iosb.ilt.configurable.annotations.ConfigurableField;
 import de.fraunhofer.iosb.ilt.configurable.editor.EditorClass;
-import de.fraunhofer.iosb.ilt.gjimp.ObservationUploader;
+import de.fraunhofer.iosb.ilt.gjimp.StaService;
 import de.fraunhofer.iosb.ilt.gjimp.utils.FrostUtils;
 import de.fraunhofer.iosb.ilt.gjimp.utils.JsonUtils;
 import de.fraunhofer.iosb.ilt.gjimp.utils.ProgressTracker;
@@ -54,12 +54,12 @@ public class GeoJsonConverter implements AnnotatedConfigurable<SensorThingsServi
 
 	private static final Logger LOGGER = LoggerFactory.getLogger(GeoJsonConverter.class.getName());
 
-	private static final Pattern PLACE_HOLDER_PATTERN = Pattern.compile("\\{([a-zA-Z_0-9./~-]+)(\\|([^}]+))?\\}");
+	private static final Pattern PLACE_HOLDER_PATTERN = Pattern.compile("\\{([^|{}]+)(\\|([^}]+))?\\}");
 
 	@ConfigurableField(editor = EditorClass.class, optional = false,
 			label = "SensorThingsService", description = "The STA service to upload the Locations & Things to")
-	@EditorClass.EdOptsClass(clazz = ObservationUploader.class)
-	private ObservationUploader uploader;
+	@EditorClass.EdOptsClass(clazz = StaService.class)
+	private StaService uploader;
 
 	@ConfigurableField(editor = EditorClass.class, optional = false,
 			label = "Locations", description = "The definition of how to create Locations.")
@@ -71,6 +71,16 @@ public class GeoJsonConverter implements AnnotatedConfigurable<SensorThingsServi
 	@EditorClass.EdOptsClass(clazz = CreatorThing.class)
 	private CreatorThing creatorThings;
 
+	@ConfigurableField(editor = EditorClass.class, optional = true,
+			label = "ObsProps", description = "The definition of how to create ObservedProperties.")
+	@EditorClass.EdOptsClass(clazz = CreatorObservedProperty.class)
+	private CreatorObservedProperty creatorObservedProperties;
+
+	@ConfigurableField(editor = EditorClass.class, optional = true,
+			label = "CSV Loader", description = "The definition of if and how to load CSV.")
+	@EditorClass.EdOptsClass(clazz = CsvLoaderOptions.class)
+	private CsvLoaderOptions csvLoader;
+
 	private SensorThingsService service;
 	private FrostUtils frostUtils;
 
@@ -81,17 +91,24 @@ public class GeoJsonConverter implements AnnotatedConfigurable<SensorThingsServi
 		frostUtils = new FrostUtils(service);
 	}
 
+	public CsvLoaderOptions getCsvLoader() {
+		return csvLoader;
+	}
+
 	public String generateTestOutput(Feature feature) {
 		return new StringBuilder()
 				.append(creatorLocations.generateTestOutput(feature))
 				.append('\n')
 				.append(creatorThings.generateTestOutput(feature))
+				.append('\n')
+				.append(creatorObservedProperties.generateTestOutput(feature))
 				.toString();
 	}
 
 	public void importAll(FeatureCollection collection, ProgressTracker tracker) {
 		creatorLocations.loadCache(tracker);
 		creatorThings.loadCache(tracker);
+		creatorObservedProperties.loadCache(tracker);
 
 		List<Feature> features = collection.getFeatures();
 		int total = features.size();
@@ -108,7 +125,8 @@ public class GeoJsonConverter implements AnnotatedConfigurable<SensorThingsServi
 
 	public void importFeature(Feature feature) throws JsonProcessingException, ServiceFailureException {
 		Location location = creatorLocations.createLocation(feature, frostUtils);
-		Thing thing = creatorThings.createThing(feature, location, frostUtils);
+		creatorThings.createThing(feature, location, frostUtils);
+		creatorObservedProperties.createObservedProperty(feature, location, frostUtils);
 	}
 
 	public static String fillTemplate(String template, Object feature, boolean forUrl) {

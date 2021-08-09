@@ -25,6 +25,7 @@
 
 		<FROST-Client.version>0.35</FROST-Client.version>
 		<commons-collections.version>4.4</commons-collections.version>
+		<commons-csv.version>1.9.0</commons-csv.version>
 		<commons-io.version>2.11.0</commons-io.version>
 		<configurable.version>0.30</configurable.version>
 		<dockerfile-maven-plugin.version>1.4.13</dockerfile-maven-plugin.version>
@@ -62,13 +63,6 @@
 
 
 	<repositories>
-		<repository>
-			<id>bintray-fraunhoferiosb-Maven</id>
-			<url>https://dl.bintray.com/fraunhoferiosb/Maven</url>
-			<releases>
-				<enabled>true</enabled>
-			</releases>
-		</repository>
 		<repository>
 			<id>osgeo</id>
 			<name>Open Source Geospatial Foundation Repository</name>
@@ -159,6 +153,21 @@
 			<groupId>commons-io</groupId>
 			<artifactId>commons-io</artifactId>
 			<version>${commons-io.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>org.apache.commons</groupId>
+			<artifactId>commons-csv</artifactId>
+			<version>${commons-csv.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>org.geotools</groupId>
+			<artifactId>gt-referencing</artifactId>
+			<version>${geotools.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>org.geotools</groupId>
+			<artifactId>gt-epsg-hsql</artifactId>
+			<version>${geotools.version}</version>
 		</dependency>
 		<dependency>
 			<groupId>org.openjfx</groupId>

@@ -89,6 +89,10 @@ public class CreatorLocation implements AnnotatedConfigurable<SensorThingsServic
 	}
 
 	public String generateTestOutput(Feature feature) {
+		if (templateName.isEmpty()) {
+			return "Locations not configured.\n";
+		}
+
 		String name = fillTemplate(templateName, feature, false);
 		String description = fillTemplate(templateDescription, feature, false);
 		String propertiesString = fillTemplate(templateProperties, feature, false);
@@ -123,6 +127,9 @@ public class CreatorLocation implements AnnotatedConfigurable<SensorThingsServic
 	}
 
 	public void loadCache(ProgressTracker tracker) {
+		if (templateName.isEmpty()) {
+			return;
+		}
 		cache = new EntityCache<>(
 				entity -> fillTemplate(templateCacheKey, entity, false),
 				entity -> entity.getName());
@@ -138,6 +145,10 @@ public class CreatorLocation implements AnnotatedConfigurable<SensorThingsServic
 	}
 
 	public Location createLocation(Feature feature, FrostUtils frostUtils) throws JsonProcessingException, ServiceFailureException {
+		if (templateName.isEmpty()) {
+			return null;
+		}
+
 		String name = fillTemplate(templateName, feature, false);
 		String description = fillTemplate(templateDescription, feature, false);
 		String propertiesString = fillTemplate(templateProperties, feature, false);

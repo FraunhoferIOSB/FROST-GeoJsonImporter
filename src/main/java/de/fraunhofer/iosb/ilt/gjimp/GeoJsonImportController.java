@@ -24,6 +24,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
 import de.fraunhofer.iosb.ilt.configurable.ConfigurationException;
 import de.fraunhofer.iosb.ilt.configurable.editor.EditorClass;
+import de.fraunhofer.iosb.ilt.gjimp.geojson.CsvLoaderOptions;
 import de.fraunhofer.iosb.ilt.gjimp.geojson.GeoJsonConverter;
 import de.fraunhofer.iosb.ilt.gjimp.utils.ProgressTracker;
 import de.fraunhofer.iosb.ilt.sta.jackson.ObjectMapperFactory;
@@ -35,6 +36,8 @@ import java.util.List;
 import java.util.ResourceBundle;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import javafx.concurrent.Task;
 import javafx.event.ActionEvent;
 import javafx.fxml.FXML;
@@ -116,13 +119,21 @@ public class GeoJsonImportController implements Initializable {
 
 	private void loadGeoJson() {
 		textAreaJson.setText("Loading File...");
-		String json = loadFromFile("Load GeoJson File", labelFile);
-		if (json == null) {
+		String dataString = loadFromFile("Load GeoJson File", labelFile);
+		if (dataString == null) {
 			return;
 		}
 		textAreaJson.setText("Parsing File...");
+
 		try {
-			GeoJsonObject geoJsonObject = ObjectMapperFactory.get().readValue(json, GeoJsonObject.class);
+			GeoJsonConverter converter = createConverter();
+			final CsvLoaderOptions csvLoader = converter.getCsvLoader();
+			GeoJsonObject geoJsonObject;
+			if (csvLoader.isSourceCsv()) {
+				geoJsonObject = csvLoader.loadGeoJson(dataString);
+			} else {
+				geoJsonObject = ObjectMapperFactory.get().readValue(dataString, GeoJsonObject.class);
+			}
 			if (geoJsonObject instanceof FeatureCollection) {
 				collection = (FeatureCollection) geoJsonObject;
 				loadFeature(0);
@@ -130,7 +141,14 @@ public class GeoJsonImportController implements Initializable {
 				textAreaJson.setText("File is not a FeatureCollection!");
 			}
 		} catch (JsonProcessingException ex) {
+			LOGGER.error("", ex);
 			textAreaJson.setText("File is not a FeatureCollection!");
+		} catch (ConfigurationException ex) {
+			LOGGER.error("", ex);
+			textAreaJson.setText("Failed to load converter!");
+		} catch (IOException ex) {
+			LOGGER.error("", ex);
+			textAreaJson.setText("Failed to parse CSV!");
 		}
 	}
 
@@ -224,10 +242,9 @@ public class GeoJsonImportController implements Initializable {
 	}
 
 	private String generateTestOutput(Feature feature) {
-		EditorClass<SensorThingsService, Object, GeoJsonConverter> importer = new EditorClass<>(new SensorThingsService(), null, GeoJsonConverter.class);
-		importer.setConfig(editor.getConfig());
 		try {
-			return importer.getValue().generateTestOutput(feature);
+			GeoJsonConverter converter = createConverter();
+			return converter.generateTestOutput(feature);
 		} catch (ConfigurationException ex) {
 			LOGGER.error("Exception", ex);
 			return "Failed to create importer: " + ex.getMessage();
@@ -287,9 +304,15 @@ public class GeoJsonImportController implements Initializable {
 		if (collection == null) {
 			return;
 		}
+		GeoJsonConverter converter = createConverter();
+		converter.importAll(collection, tracker);
+	}
+
+	private GeoJsonConverter createConverter() throws ConfigurationException {
 		EditorClass<SensorThingsService, Object, GeoJsonConverter> importer = new EditorClass<>(new SensorThingsService(), null, GeoJsonConverter.class);
 		importer.setConfig(editor.getConfig());
-		importer.getValue().importAll(collection, tracker);
+		final GeoJsonConverter converter = importer.getValue();
+		return converter;
 	}
 
 	private void importDone() {

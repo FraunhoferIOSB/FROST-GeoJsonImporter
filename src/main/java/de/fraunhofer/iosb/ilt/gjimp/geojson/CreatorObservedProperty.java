@@ -34,6 +34,7 @@ import de.fraunhofer.iosb.ilt.gjimp.utils.ProgressTracker;
 import de.fraunhofer.iosb.ilt.sta.ServiceFailureException;
 import de.fraunhofer.iosb.ilt.sta.jackson.ObjectMapperFactory;
 import de.fraunhofer.iosb.ilt.sta.model.Location;
+import de.fraunhofer.iosb.ilt.sta.model.ObservedProperty;
 import de.fraunhofer.iosb.ilt.sta.model.Thing;
 import de.fraunhofer.iosb.ilt.sta.service.SensorThingsService;
 import java.util.HashMap;
@@ -47,32 +48,32 @@ import org.slf4j.LoggerFactory;
  * @author hylke
  */
 @ConfigurableClass
-public class CreatorThing implements AnnotatedConfigurable<SensorThingsService, Object> {
+public class CreatorObservedProperty implements AnnotatedConfigurable<SensorThingsService, Object> {
 
-	private static final Logger LOGGER = LoggerFactory.getLogger(CreatorThing.class.getName());
-
-	@ConfigurableField(editor = EditorBoolean.class, optional = false,
-			label = "Keep Locations", description = "Keep any existing locations the thing has, and add the new one")
-	@EditorBoolean.EdOptsBool(dflt = false)
-	private boolean keepLocations;
+	private static final Logger LOGGER = LoggerFactory.getLogger(CreatorObservedProperty.class.getName());
 
 	@ConfigurableField(editor = EditorString.class, optional = false,
-			label = "Name Template", description = "Template used to generate the name, using {path.to.field|default} placeholders.")
+			label = "Name Template", description = "Template used to generate the name, using {path/to/field|default} placeholders.")
 	@EditorString.EdOptsString(lines = 1)
 	private String templateName;
 
 	@ConfigurableField(editor = EditorString.class, optional = false,
-			label = "Description Template", description = "Template used to generate the description, using {path.to.field|default} placeholders.")
+			label = "Definition Template", description = "Template used to generate the definition, using {path/to/field|default} placeholders.")
+	@EditorString.EdOptsString(lines = 1)
+	private String templateDefinition;
+
+	@ConfigurableField(editor = EditorString.class, optional = false,
+			label = "Description Template", description = "Template used to generate the description, using {path/to/field|default} placeholders.")
 	@EditorString.EdOptsString(lines = 3)
 	private String templateDescription;
 
 	@ConfigurableField(editor = EditorString.class, optional = true,
-			label = "Properties Template", description = "Template used to generate the properties, using {path.to.field|default} placeholders.")
+			label = "Properties Template", description = "Template used to generate the properties, using {path/to/field|default} placeholders.")
 	@EditorString.EdOptsString(lines = 4)
 	private String templateProperties;
 
 	@ConfigurableField(editor = EditorString.class, optional = false,
-			label = "EqualsFilter", description = "Template used to generate the filter to check for duplicates, using {path.to.field|default} placeholders. Template runs against the new Entity!")
+			label = "EqualsFilter", description = "Template used to generate the filter to check for duplicates, using {path/to/field|default} placeholders. Template runs against the new Entity!")
 	@EditorString.EdOptsString(lines = 1, dflt = "name eq '{name|-}'")
 	private String templateEqualsFilter;
 
@@ -82,11 +83,11 @@ public class CreatorThing implements AnnotatedConfigurable<SensorThingsService, 
 	private String cacheFilter;
 
 	@ConfigurableField(editor = EditorString.class, optional = false,
-			label = "CacheKey", description = "Template used to generate the key used to cache, using {path.to.field|default} placeholders. Template runs against the new Entity!")
+			label = "CacheKey", description = "Template used to generate the key used to cache, using {path/to/field|default} placeholders. Template runs against the new Entity!")
 	@EditorString.EdOptsString(lines = 1, dflt = "{properties.type}-{properties.nutsId}")
 	private String templateCacheKey;
 
-	private EntityCache<String, Thing> cacheThings;
+	private EntityCache<String, ObservedProperty> cache;
 	private SensorThingsService service;
 
 	@Override
@@ -97,11 +98,12 @@ public class CreatorThing implements AnnotatedConfigurable<SensorThingsService, 
 
 	public String generateTestOutput(Feature feature) {
 		if (templateName.isEmpty()) {
-			return "Things not configured.\n";
+			return "ObservedProperties not configured.\n";
 		}
 
 		String name = fillTemplate(templateName, feature, false);
 		String description = fillTemplate(templateDescription, feature, false);
+		String definition = fillTemplate(templateDefinition, feature, false);
 		String propertiesString = fillTemplate(templateProperties, feature, false);
 
 		Map<String, Object> properties = null;
@@ -121,9 +123,10 @@ public class CreatorThing implements AnnotatedConfigurable<SensorThingsService, 
 		String equalsFilter = fillTemplate(templateEqualsFilter, newLocation, true);
 		String cacheKey = fillTemplate(templateCacheKey, newLocation, false);
 
-		StringBuilder output = new StringBuilder("Things:\n");
+		StringBuilder output = new StringBuilder("ObservedProperties:\n");
 		output.append("  Name: ").append(name).append('\n')
 				.append("  Description: ").append(description).append('\n')
+				.append("  Definition: ").append(definition).append('\n')
 				.append("  Properties: ").append(propertiesString).append('\n')
 				.append('\n')
 				.append("  Equals Filter: ").append(equalsFilter).append('\n')
@@ -137,47 +140,49 @@ public class CreatorThing implements AnnotatedConfigurable<SensorThingsService, 
 		if (templateName.isEmpty()) {
 			return;
 		}
-		cacheThings = new EntityCache<>(
+		cache = new EntityCache<>(
 				entity -> fillTemplate(templateCacheKey, entity, false),
 				entity -> entity.getName());
 		try {
-			cacheThings.load(service.things(), cacheFilter, "id,name,description,properties", "Locations($select=id)");
+			cache.load(service.observedProperties(), cacheFilter, "id,name,description,definition,properties", "");
 		} catch (ServiceFailureException ex) {
 			LOGGER.error("Failed to load the Cache.", ex);
 		}
 	}
 
-	public EntityCache<String, Thing> getCache() {
-		return cacheThings;
+	public EntityCache<String, ObservedProperty> getCache() {
+		return cache;
 	}
 
-	public Thing createThing(Feature feature, Location location, FrostUtils frostUtils) throws JsonProcessingException, ServiceFailureException {
+	public ObservedProperty createObservedProperty(Feature feature, Location location, FrostUtils frostUtils) throws JsonProcessingException, ServiceFailureException {
 		if (templateName.isEmpty()) {
 			return null;
 		}
 
 		String name = fillTemplate(templateName, feature, false);
+		String definition = fillTemplate(templateDefinition, feature, false);
 		String description = fillTemplate(templateDescription, feature, false);
 		String propertiesString = fillTemplate(templateProperties, feature, false);
 		Map<String, Object> properties = ObjectMapperFactory.get().readValue(propertiesString, JsonUtils.TYPE_MAP_STRING_OBJECT);
 
-		Thing newThing = FrostUtils.buildThing(name, description, properties, location);
-		Thing cachedThing = getCachedThing(newThing);
+		ObservedProperty newEntity = new ObservedProperty(name, definition, description);
+		newEntity.setProperties(properties);
+		ObservedProperty cachedEntity = getCachedEntity(newEntity);
 
-		String filter = fillTemplate(templateEqualsFilter, newThing, true);
+		String filter = fillTemplate(templateEqualsFilter, newEntity, true);
 		LOGGER.debug("Thing Filter: {}", filter);
-		Thing thing = frostUtils.findOrCreateThing(filter, newThing, cachedThing, keepLocations);
-		cacheThings.put(thing);
+		ObservedProperty entity = frostUtils.findOrCreateOp(filter, newEntity, cachedEntity);
+		cache.put(entity);
 
-		return thing;
+		return entity;
 	}
 
-	public Thing getCachedThing(String cacheKey) {
-		return cacheThings.get(cacheKey);
+	public ObservedProperty getCachedEntity(String cacheKey) {
+		return cache.get(cacheKey);
 	}
 
-	public Thing getCachedThing(Thing newThing) {
-		String cacheKey = fillTemplate(templateCacheKey, newThing, false);
-		return cacheThings.get(cacheKey);
+	public ObservedProperty getCachedEntity(ObservedProperty newEntity) {
+		String cacheKey = fillTemplate(templateCacheKey, newEntity, false);
+		return cache.get(cacheKey);
 	}
 }

@@ -49,7 +49,16 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import javax.xml.crypto.dsig.TransformException;
 import org.geojson.GeoJsonObject;
+import org.geojson.LngLatAlt;
+import org.geojson.Point;
+import org.geotools.geometry.DirectPosition2D;
+import org.geotools.referencing.CRS;
+import org.opengis.geometry.MismatchedDimensionException;
+import org.opengis.referencing.FactoryException;
+import org.opengis.referencing.crs.CoordinateReferenceSystem;
+import org.opengis.referencing.operation.MathTransform;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.threeten.extra.Interval;
@@ -362,66 +371,57 @@ public final class FrostUtils {
 		return update;
 	}
 
-	public boolean maybeUpdateOp(
-			final String name,
-			final String def,
-			final String description,
-			final Map<String, Object> properties,
-			final ObservedProperty cached) throws ServiceFailureException {
+	public ObservedProperty findOrCreateOp(final String filter, final String name, final String def, final String description, final Map<String, Object> properties, final ObservedProperty cached) throws ServiceFailureException {
+		final ObservedProperty observedProperty = new ObservedProperty(name, def, description);
+		observedProperty.setProperties(properties);
+		return findOrCreateOp(filter, observedProperty, cached);
+	}
+
+	public ObservedProperty findOrCreateOp(final String filter, final ObservedProperty newObsProp, final ObservedProperty cachedObsProp) throws ServiceFailureException {
+		ObservedProperty observedProperty = null;
+		if (cachedObsProp != null) {
+			observedProperty = cachedObsProp;
+		} else {
+			final Query<ObservedProperty> query = service.observedProperties().query();
+			final EntityList<ObservedProperty> opList = addOrCreateFilter(query, filter, newObsProp.getName()).list();
+			if (opList.size() > 1) {
+				throw new IllegalStateException("More than one observedProperty with name " + newObsProp.getName());
+			}
+			if (opList.size() == 1) {
+				observedProperty = opList.iterator().next();
+			}
+		}
+		if (observedProperty == null) {
+			LOGGER.info("Creating ObservedProperty {}.", newObsProp.getName());
+			observedProperty = newObsProp;
+			create(observedProperty);
+		} else {
+			maybeUpdateOp(newObsProp, observedProperty);
+		}
+		return observedProperty;
+	}
+
+	public boolean maybeUpdateOp(final ObservedProperty newObsProp, final ObservedProperty opToUpdate) throws ServiceFailureException {
 		boolean update = false;
-		if (!name.equals(cached.getName())) {
+		if (!newObsProp.getName().equals(opToUpdate.getName())) {
 			update = true;
-			cached.setName(name);
+			opToUpdate.setName(newObsProp.getName());
 		}
-		if (!description.equals(cached.getDescription())) {
+		if (!newObsProp.getDescription().equals(opToUpdate.getDescription())) {
 			update = true;
-			cached.setDescription(description);
+			opToUpdate.setDescription(newObsProp.getDescription());
 		}
-		if (cached.getProperties() == null && properties != null) {
-			cached.setProperties(properties);
+		if (opToUpdate.getProperties() == null && newObsProp.getProperties() != null && !newObsProp.getProperties().isEmpty()) {
+			opToUpdate.setProperties(newObsProp.getProperties());
 			update = true;
 		}
-		if (addProperties(cached.getProperties(), properties, 5)) {
+		if (addProperties(opToUpdate.getProperties(), newObsProp.getProperties(), 5)) {
 			update = true;
 		}
 		if (update) {
-			update(cached);
+			update(opToUpdate);
 		}
 		return update;
-	}
-
-	public ObservedProperty findOrCreateOp(
-			final String filter,
-			final String name,
-			final String def,
-			final String description,
-			final Map<String, Object> properties,
-			final ObservedProperty cached) throws ServiceFailureException {
-		ObservedProperty op = null;
-		if (cached != null) {
-			op = cached;
-		} else {
-			final Query<ObservedProperty> query = service.observedProperties().query();
-			final EntityList<ObservedProperty> opList = addOrCreateFilter(query, filter, name).list();
-			if (opList.size() > 1) {
-				throw new IllegalStateException("More than one observedProperty with name " + name);
-			}
-			if (opList.size() == 1) {
-				op = opList.iterator().next();
-			}
-		}
-		if (op == null) {
-			LOGGER.info("Creating ObservedProperty {}.", name);
-			op = new ObservedProperty();
-			op.setName(name);
-			op.setDefinition(def);
-			op.setDescription(description);
-			op.setProperties(properties);
-			create(op);
-		} else {
-			maybeUpdateOp(name, def, description, properties, op);
-		}
-		return op;
 	}
 
 	public boolean maybeUpdateDatastream(
@@ -854,6 +854,37 @@ public final class FrostUtils {
 		return new TimeObject(interval);
 	}
 
+	public static Point convertCoordinates(final double y, final double x, final String crsName) {
+		if (Utils.isNullOrEmpty(crsName)) {
+			return new Point(x, y);
+		}
+		try {
+			String fullCrs = crsName;
+			if (!fullCrs.contains(":")) {
+				fullCrs = "EPSG:" + fullCrs;
+			}
+			final CoordinateReferenceSystem sourceCrs = CRS.decode(fullCrs);
+			final CoordinateReferenceSystem targetCrs = CRS.decode("EPSG:4326");
+			final MathTransform transform = CRS.findMathTransform(sourceCrs, targetCrs);
+			final DirectPosition2D sourcePoint = new DirectPosition2D(sourceCrs, x, y);
+			final DirectPosition2D targetPoint = new DirectPosition2D(targetCrs);
+			transform.transform(sourcePoint, targetPoint);
+			return new Point(targetPoint.y, targetPoint.x);
+		} catch (FactoryException | MismatchedDimensionException | org.opengis.referencing.operation.TransformException exc) {
+			throw new RuntimeException("Failed to convert coordinates", exc);
+		}
+	}
+
+	public static Point convertCoordinates(final Point point, final String locationSrsName) {
+		final LngLatAlt sourceCoordinates = point.getCoordinates();
+		return convertCoordinates(sourceCoordinates.getLatitude(), sourceCoordinates.getLongitude(), locationSrsName);
+	}
+
+	public static Point convertCoordinates(final String locationPos, final String locationSrsName) {
+		final String[] coordinates = locationPos.split(" ");
+		return convertCoordinates(Double.parseDouble(coordinates[1]), Double.parseDouble(coordinates[0]), locationSrsName);
+	}
+
 	public static Map<String, Object> putIntoSubMap(Map<String, Object> map, String subMapName, String key, Object value) {
 		Map<String, Object> subMap = (Map<String, Object>) map.computeIfAbsent(subMapName, (String t) -> new HashMap<>());
 		subMap.put(key, value);
@@ -862,6 +893,29 @@ public final class FrostUtils {
 
 	public static String afterLastSlash(String input) {
 		return input.substring(input.lastIndexOf('/') + 1);
+	}
+
+	public static PropertyBuilder propertiesBuilder() {
+		return new PropertyBuilder();
+	}
+
+	public static class PropertyBuilder {
+
+		Map<String, Object> properties = new HashMap<>();
+
+		public PropertyBuilder addItem(final String key, final Object value) {
+			properties.put(key, value);
+			return this;
+		}
+
+		public PropertyBuilder addPath(final String path, final Object value) {
+			CollectionsHelper.setOn(properties, path, value);
+			return this;
+		}
+
+		public Map<String, Object> build() {
+			return properties;
+		}
 	}
 
 }
