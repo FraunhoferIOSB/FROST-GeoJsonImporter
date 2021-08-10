@@ -78,14 +78,14 @@ public class CsvLoaderOptions implements AnnotatedConfigurable<SensorThingsServi
 	private boolean hasHeader;
 
 	@ConfigurableField(editor = EditorString.class, optional = false,
-			label = "X-Column", description = "Name of the X/Lon column")
+			label = "Axis One", description = "Name of the First-Axis column. Axis oder must be according to the used CRS.")
 	@EditorString.EdOptsString(dflt = "")
-	private String colX;
+	private String colAxisOne;
 
 	@ConfigurableField(editor = EditorString.class, optional = false,
-			label = "Y-Column", description = "Name of the Y/Lat columns")
+			label = "Axis Two", description = "Name of the Second-Axis column. Axis oder must be according to the used CRS.")
 	@EditorString.EdOptsString(dflt = "")
-	private String colY;
+	private String colAxisTwo;
 
 	@ConfigurableField(editor = EditorString.class, optional = true,
 			label = "CRS", description = "The CRS of the imput data.")
@@ -124,10 +124,10 @@ public class CsvLoaderOptions implements AnnotatedConfigurable<SensorThingsServi
 				continue;
 			}
 			Feature feature = new Feature();
-			if (record.isMapped(colX) && record.isMapped(colY)) {
-				BigDecimal xValue = new BigDecimal(record.get(colX));
-				BigDecimal yValue = new BigDecimal(record.get(colY));
-				Point point = FrostUtils.convertCoordinates(yValue.doubleValue(), xValue.doubleValue(), getOrName(record, colCrs), numberScale);
+			if (record.isMapped(colAxisOne) && record.isMapped(colAxisTwo)) {
+				BigDecimal axisOneValue = new BigDecimal(record.get(colAxisOne));
+				BigDecimal axisTwoValue = new BigDecimal(record.get(colAxisTwo));
+				Point point = FrostUtils.convertCoordinates(axisOneValue.doubleValue(), axisTwoValue.doubleValue(), getOrName(record, colCrs), numberScale);
 				feature.setGeometry(point);
 			}
 			Map properties = record.toMap();

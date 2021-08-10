@@ -855,11 +855,11 @@ public final class FrostUtils {
 		return new TimeObject(interval);
 	}
 
-	public static Point convertCoordinates(final double y, final double x, final String crsName, int numberScale) {
+	public static Point convertCoordinates(final double first, final double second, final String crsName, int numberScale) {
 		if (Utils.isNullOrEmpty(crsName)) {
 			return new Point(
-					new BigDecimal(x).setScale(numberScale, RoundingMode.HALF_EVEN).doubleValue(),
-					new BigDecimal(y).setScale(numberScale, RoundingMode.HALF_EVEN).doubleValue());
+					new BigDecimal(second).setScale(numberScale, RoundingMode.HALF_EVEN).doubleValue(),
+					new BigDecimal(first).setScale(numberScale, RoundingMode.HALF_EVEN).doubleValue());
 		}
 		try {
 			String fullCrs = crsName;
@@ -869,7 +869,7 @@ public final class FrostUtils {
 			final CoordinateReferenceSystem sourceCrs = CRS.decode(fullCrs);
 			final CoordinateReferenceSystem targetCrs = CRS.decode("EPSG:4326");
 			final MathTransform transform = CRS.findMathTransform(sourceCrs, targetCrs);
-			final DirectPosition2D sourcePoint = new DirectPosition2D(sourceCrs, x, y);
+			final DirectPosition2D sourcePoint = new DirectPosition2D(sourceCrs, first, second);
 			final DirectPosition2D targetPoint = new DirectPosition2D(targetCrs);
 			transform.transform(sourcePoint, targetPoint);
 			return new Point(
@@ -880,14 +880,13 @@ public final class FrostUtils {
 		}
 	}
 
-	public static Point convertCoordinates(final Point point, final String locationSrsName, int numberScale) {
-		final LngLatAlt sourceCoordinates = point.getCoordinates();
-		return convertCoordinates(sourceCoordinates.getLatitude(), sourceCoordinates.getLongitude(), locationSrsName, numberScale);
-	}
-
-	public static Point convertCoordinates(final String locationPos, final String locationSrsName, int numberScale) {
+	public static Point convertCoordinates(final String locationPos, final String locationSrsName, int numberScale, boolean flip) {
 		final String[] coordinates = locationPos.split(" ");
-		return convertCoordinates(Double.parseDouble(coordinates[1]), Double.parseDouble(coordinates[0]), locationSrsName, numberScale);
+		if (flip) {
+			return convertCoordinates(Double.parseDouble(coordinates[1]), Double.parseDouble(coordinates[0]), locationSrsName, numberScale);
+		} else {
+			return convertCoordinates(Double.parseDouble(coordinates[0]), Double.parseDouble(coordinates[1]), locationSrsName, numberScale);
+		}
 	}
 
 	public static Map<String, Object> putIntoSubMap(Map<String, Object> map, String subMapName, String key, Object value) {
