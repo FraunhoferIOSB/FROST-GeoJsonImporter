@@ -61,7 +61,7 @@ public class GeoJsonConverter implements AnnotatedConfigurable<SensorThingsServi
 	@EditorClass.EdOptsClass(clazz = StaService.class)
 	private StaService uploader;
 
-	@ConfigurableField(editor = EditorClass.class, optional = false,
+	@ConfigurableField(editor = EditorClass.class, optional = true,
 			label = "Locations", description = "The definition of how to create Locations.")
 	@EditorClass.EdOptsClass(clazz = CreatorLocation.class)
 	private CreatorLocation creatorLocations;
@@ -155,6 +155,9 @@ public class GeoJsonConverter implements AnnotatedConfigurable<SensorThingsServi
 			}
 		}
 		if (value instanceof Map || value instanceof List || value == null) {
+			return deflt;
+		}
+		if (Utils.isNullOrEmpty(value.toString())) {
 			return deflt;
 		}
 		if (forUrl) {

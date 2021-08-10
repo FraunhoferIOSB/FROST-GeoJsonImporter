@@ -92,6 +92,11 @@ public class CsvLoaderOptions implements AnnotatedConfigurable<SensorThingsServi
 	@EditorString.EdOptsString(dflt = "")
 	private String colCrs;
 
+	@ConfigurableField(editor = EditorInt.class, optional = true,
+			label = "Numeric Scale", description = "The number of significant digits to use in coordinates. Default=6.")
+	@EditorInt.EdOptsInt(dflt = 6, max = 15, min = 0, step = 1)
+	private Integer numberScale;
+
 	public CSVParser parseData(String data) throws IOException {
 		char finalDelimiter = delimiter.charAt(0);
 		if (tabIsDelimeter) {
@@ -122,7 +127,7 @@ public class CsvLoaderOptions implements AnnotatedConfigurable<SensorThingsServi
 			if (record.isMapped(colX) && record.isMapped(colY)) {
 				BigDecimal xValue = new BigDecimal(record.get(colX));
 				BigDecimal yValue = new BigDecimal(record.get(colY));
-				Point point = FrostUtils.convertCoordinates(yValue.doubleValue(), xValue.doubleValue(), getOrName(record, colCrs));
+				Point point = FrostUtils.convertCoordinates(yValue.doubleValue(), xValue.doubleValue(), getOrName(record, colCrs), numberScale);
 				feature.setGeometry(point);
 			}
 			Map properties = record.toMap();

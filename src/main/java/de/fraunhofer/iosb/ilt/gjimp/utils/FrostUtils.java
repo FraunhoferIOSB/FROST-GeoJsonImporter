@@ -37,6 +37,7 @@ import de.fraunhofer.iosb.ilt.sta.query.Query;
 import de.fraunhofer.iosb.ilt.sta.service.SensorThingsService;
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.math.RoundingMode;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.ZoneId;
@@ -854,9 +855,11 @@ public final class FrostUtils {
 		return new TimeObject(interval);
 	}
 
-	public static Point convertCoordinates(final double y, final double x, final String crsName) {
+	public static Point convertCoordinates(final double y, final double x, final String crsName, int numberScale) {
 		if (Utils.isNullOrEmpty(crsName)) {
-			return new Point(x, y);
+			return new Point(
+					new BigDecimal(x).setScale(numberScale, RoundingMode.HALF_EVEN).doubleValue(),
+					new BigDecimal(y).setScale(numberScale, RoundingMode.HALF_EVEN).doubleValue());
 		}
 		try {
 			String fullCrs = crsName;
@@ -869,20 +872,22 @@ public final class FrostUtils {
 			final DirectPosition2D sourcePoint = new DirectPosition2D(sourceCrs, x, y);
 			final DirectPosition2D targetPoint = new DirectPosition2D(targetCrs);
 			transform.transform(sourcePoint, targetPoint);
-			return new Point(targetPoint.y, targetPoint.x);
+			return new Point(
+					new BigDecimal(targetPoint.y).setScale(numberScale, RoundingMode.HALF_EVEN).doubleValue(),
+					new BigDecimal(targetPoint.x).setScale(numberScale, RoundingMode.HALF_EVEN).doubleValue());
 		} catch (FactoryException | MismatchedDimensionException | org.opengis.referencing.operation.TransformException exc) {
 			throw new RuntimeException("Failed to convert coordinates", exc);
 		}
 	}
 
-	public static Point convertCoordinates(final Point point, final String locationSrsName) {
+	public static Point convertCoordinates(final Point point, final String locationSrsName, int numberScale) {
 		final LngLatAlt sourceCoordinates = point.getCoordinates();
-		return convertCoordinates(sourceCoordinates.getLatitude(), sourceCoordinates.getLongitude(), locationSrsName);
+		return convertCoordinates(sourceCoordinates.getLatitude(), sourceCoordinates.getLongitude(), locationSrsName, numberScale);
 	}
 
-	public static Point convertCoordinates(final String locationPos, final String locationSrsName) {
+	public static Point convertCoordinates(final String locationPos, final String locationSrsName, int numberScale) {
 		final String[] coordinates = locationPos.split(" ");
-		return convertCoordinates(Double.parseDouble(coordinates[1]), Double.parseDouble(coordinates[0]), locationSrsName);
+		return convertCoordinates(Double.parseDouble(coordinates[1]), Double.parseDouble(coordinates[0]), locationSrsName, numberScale);
 	}
 
 	public static Map<String, Object> putIntoSubMap(Map<String, Object> map, String subMapName, String key, Object value) {
