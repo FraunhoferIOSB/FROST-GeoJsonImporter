@@ -27,6 +27,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import org.apache.commons.lang3.StringUtils;
 
 /**
  *
@@ -97,5 +98,24 @@ public class UnitConverter implements AnnotatedConfigurable<Object, Object> {
 			forward.computeIfAbsent(unit.from, (t) -> new HashMap<>()).put(unit.to, unit);
 			reverse.computeIfAbsent(unit.to, (t) -> new HashMap<>()).put(unit.from, unit);
 		}
+	}
+
+	public static BigDecimal stringToBigDecimal(String valueString) {
+		return new BigDecimal(convertDecimalSeparator(valueString));
+	}
+
+	public static String convertDecimalSeparator(String valueString) {
+		int idxComma = valueString.indexOf(',');
+		int idxPoint = valueString.indexOf('.');
+		if (idxComma > idxPoint) {
+			return convertFromComma(valueString);
+		}
+		return valueString;
+	}
+
+	public static String convertFromComma(String valueString) {
+		valueString = StringUtils.replace(valueString, ".", "");
+		valueString = StringUtils.replace(valueString, ",", ".");
+		return valueString;
 	}
 }

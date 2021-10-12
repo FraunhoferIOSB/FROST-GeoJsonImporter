@@ -23,6 +23,8 @@ import de.fraunhofer.iosb.ilt.configurable.ConfigEditor;
 import de.fraunhofer.iosb.ilt.configurable.ConfigurationException;
 import de.fraunhofer.iosb.ilt.configurable.annotations.ConfigurableClass;
 import de.fraunhofer.iosb.ilt.configurable.annotations.ConfigurableField;
+import de.fraunhofer.iosb.ilt.configurable.editor.EditorBoolean;
+import de.fraunhofer.iosb.ilt.configurable.editor.EditorInt;
 import de.fraunhofer.iosb.ilt.configurable.editor.EditorString;
 import static de.fraunhofer.iosb.ilt.gjimp.geojson.GeoJsonConverter.fillTemplate;
 import de.fraunhofer.iosb.ilt.gjimp.utils.EntityCache;
@@ -31,12 +33,15 @@ import static de.fraunhofer.iosb.ilt.gjimp.utils.FrostUtils.ENCODING_GEOJSON;
 import de.fraunhofer.iosb.ilt.gjimp.utils.JsonUtils;
 import de.fraunhofer.iosb.ilt.gjimp.utils.ProgressTracker;
 import de.fraunhofer.iosb.ilt.sta.ServiceFailureException;
+import de.fraunhofer.iosb.ilt.sta.Utils;
 import de.fraunhofer.iosb.ilt.sta.jackson.ObjectMapperFactory;
 import de.fraunhofer.iosb.ilt.sta.model.Location;
 import de.fraunhofer.iosb.ilt.sta.service.SensorThingsService;
 import java.util.HashMap;
 import java.util.Map;
 import org.geojson.Feature;
+import org.geojson.GeoJsonObject;
+import org.geojson.Point;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -48,6 +53,21 @@ import org.slf4j.LoggerFactory;
 public class CreatorLocation implements AnnotatedConfigurable<SensorThingsService, Object> {
 
 	private static final Logger LOGGER = LoggerFactory.getLogger(CreatorLocation.class.getName());
+
+	@ConfigurableField(editor = EditorString.class, optional = true,
+			label = "Crs Template", description = "Template used to generate the crs, using {path/to/field|default} placeholders.")
+	@EditorString.EdOptsString(lines = 1, dflt = "")
+	private String templateCrs;
+
+	@ConfigurableField(editor = EditorBoolean.class, optional = true,
+			label = "Flip Coordinates", description = "Flip lat/lon coordinates")
+	@EditorBoolean.EdOptsBool()
+	private boolean flipCoords;
+
+	@ConfigurableField(editor = EditorInt.class, optional = true,
+			label = "Numeric Scale", description = "The number of significant digits to use in coordinates. Default=6.")
+	@EditorInt.EdOptsInt(dflt = 6, max = 15, min = 0, step = 1)
+	private Integer numberScale;
 
 	@ConfigurableField(editor = EditorString.class, optional = false,
 			label = "Name Template", description = "Template used to generate the name, using {path/to/field|default} placeholders.")
@@ -108,16 +128,25 @@ public class CreatorLocation implements AnnotatedConfigurable<SensorThingsServic
 			}
 		}
 
-		Location newLocation = new Location(name, description, ENCODING_GEOJSON, feature.getGeometry());
+		GeoJsonObject geometry = getGeometry(feature);
+		String locationString;
+		try {
+			locationString = ObjectMapperFactory.get().writeValueAsString(geometry);
+		} catch (JsonProcessingException ex) {
+			locationString = "Failed to parse json: " + ex.getMessage();
+		}
+
+		Location newLocation = new Location(name, description, ENCODING_GEOJSON, geometry);
 		newLocation.setProperties(properties);
 
 		String equalsFilter = fillTemplate(templateEqualsFilter, newLocation, true);
 		String cacheKey = fillTemplate(templateCacheKey, newLocation, false);
 
-		StringBuilder output = new StringBuilder("Locations:\n");
-		output.append("  Name: ").append(name).append('\n')
-				.append("  Description: ").append(description).append('\n')
-				.append("  Properties: ").append(propertiesString).append('\n')
+		StringBuilder output = new StringBuilder("Location:\n");
+		output.append("  name: ").append(name).append('\n')
+				.append("  description: ").append(description).append('\n')
+				.append("  properties: ").append(propertiesString).append('\n')
+				.append("  location: ").append(locationString).append('\n')
 				.append('\n')
 				.append("  Equals Filter: ").append(equalsFilter).append('\n')
 				.append("  Cache Load Filter: ").append(cacheFilter).append('\n')
@@ -154,7 +183,9 @@ public class CreatorLocation implements AnnotatedConfigurable<SensorThingsServic
 		String propertiesString = fillTemplate(templateProperties, feature, false);
 		Map<String, Object> properties = ObjectMapperFactory.get().readValue(propertiesString, JsonUtils.TYPE_MAP_STRING_OBJECT);
 
-		Location newLocation = new Location(name, description, ENCODING_GEOJSON, feature.getGeometry());
+		String crs = fillTemplate(templateCrs, feature, false);
+		GeoJsonObject geometry = getGeometry(feature);
+		Location newLocation = new Location(name, description, ENCODING_GEOJSON, geometry);
 		newLocation.setProperties(properties);
 
 		Location cachedLocation = getCachedLocation(newLocation);
@@ -165,6 +196,26 @@ public class CreatorLocation implements AnnotatedConfigurable<SensorThingsServic
 		cache.put(location);
 
 		return location;
+	}
+
+	private GeoJsonObject getGeometry(Feature feature) {
+		String crs = fillTemplate(templateCrs, feature, false);
+		return convertCrs(feature.getGeometry(), crs);
+	}
+
+	private GeoJsonObject convertCrs(GeoJsonObject input, String inputCrs) {
+		if (Utils.isNullOrEmpty(inputCrs)) {
+			return input;
+		}
+		if (input instanceof Point) {
+			Point point = (Point) input;
+			if (flipCoords) {
+				return FrostUtils.convertCoordinates(point.getCoordinates().getLongitude(), point.getCoordinates().getLatitude(), inputCrs, numberScale);
+			} else {
+				return FrostUtils.convertCoordinates(point.getCoordinates().getLatitude(), point.getCoordinates().getLongitude(), inputCrs, numberScale);
+			}
+		}
+		return input;
 	}
 
 	public Location getCachedLocation(String cacheKey) {

@@ -107,7 +107,7 @@ public class GeoJsonImportController implements Initializable {
 	}
 
 	private void loadImporter() {
-		JsonElement json = toJsonElement(loadFromFile("Load Importer", null));
+		JsonElement json = toJsonElement(loadFromFile("Load Importer", null, "UTF-8"));
 		if (json == null) {
 			return;
 		}
@@ -118,15 +118,15 @@ public class GeoJsonImportController implements Initializable {
 	}
 
 	private void loadGeoJson() {
-		textAreaJson.setText("Loading File...");
-		String dataString = loadFromFile("Load GeoJson File", labelFile);
-		if (dataString == null) {
-			return;
-		}
-		textAreaJson.setText("Parsing File...");
-
 		try {
 			GeoJsonConverter converter = createConverter();
+			textAreaJson.setText("Loading File...");
+			String dataString = loadFromFile("Load GeoJson File", labelFile, converter.getCharset());
+			if (dataString == null) {
+				return;
+			}
+			textAreaJson.setText("Parsing File...");
+
 			final CsvLoaderOptions csvLoader = converter.getCsvLoader();
 			GeoJsonObject geoJsonObject;
 			if (csvLoader.isSourceCsv()) {
@@ -205,7 +205,7 @@ public class GeoJsonImportController implements Initializable {
 		textAreaTestOutput.setText(generateTestOutput(feature));
 	}
 
-	private String loadFromFile(String title, Label label) {
+	private String loadFromFile(String title, Label label, String charSet) {
 		try {
 			fileChooser.setTitle(title);
 			File file = fileChooser.showOpenDialog(paneConfig.getScene().getWindow());
@@ -215,7 +215,7 @@ public class GeoJsonImportController implements Initializable {
 			if (label != null) {
 				label.setText(file.getAbsolutePath());
 			}
-			return FileUtils.readFileToString(file, "UTF-8");
+			return FileUtils.readFileToString(file, charSet);
 		} catch (IOException ex) {
 			LOGGER.error("Failed to read file", ex);
 			Alert alert = new Alert(Alert.AlertType.ERROR);

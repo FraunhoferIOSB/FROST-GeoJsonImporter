@@ -24,14 +24,15 @@ import de.fraunhofer.iosb.ilt.configurable.ConfigurationException;
 import de.fraunhofer.iosb.ilt.configurable.annotations.ConfigurableClass;
 import de.fraunhofer.iosb.ilt.configurable.annotations.ConfigurableField;
 import de.fraunhofer.iosb.ilt.configurable.editor.EditorClass;
+import de.fraunhofer.iosb.ilt.configurable.editor.EditorString;
 import de.fraunhofer.iosb.ilt.gjimp.StaService;
 import de.fraunhofer.iosb.ilt.gjimp.utils.FrostUtils;
 import de.fraunhofer.iosb.ilt.gjimp.utils.JsonUtils;
 import de.fraunhofer.iosb.ilt.gjimp.utils.ProgressTracker;
+import de.fraunhofer.iosb.ilt.gjimp.utils.UnitConverter;
 import de.fraunhofer.iosb.ilt.sta.ServiceFailureException;
 import de.fraunhofer.iosb.ilt.sta.Utils;
 import de.fraunhofer.iosb.ilt.sta.model.Location;
-import de.fraunhofer.iosb.ilt.sta.model.Thing;
 import de.fraunhofer.iosb.ilt.sta.service.SensorThingsService;
 import java.lang.reflect.InvocationTargetException;
 import java.util.List;
@@ -54,7 +55,12 @@ public class GeoJsonConverter implements AnnotatedConfigurable<SensorThingsServi
 
 	private static final Logger LOGGER = LoggerFactory.getLogger(GeoJsonConverter.class.getName());
 
-	private static final Pattern PLACE_HOLDER_PATTERN = Pattern.compile("\\{([^|{}]+)(\\|([^}]+))?\\}");
+	private static final Pattern PLACE_HOLDER_PATTERN = Pattern.compile("\\{([^|{}]+)(\\|([^}]*))?\\}");
+
+	@ConfigurableField(editor = EditorString.class, optional = true,
+			label = "Characterset", description = "The character set to use when parsing the csv file (default UTF-8).")
+	@EditorString.EdOptsString(dflt = "UTF-8")
+	private String charset;
 
 	@ConfigurableField(editor = EditorClass.class, optional = false,
 			label = "SensorThingsService", description = "The STA service to upload the Locations & Things to")
@@ -93,6 +99,10 @@ public class GeoJsonConverter implements AnnotatedConfigurable<SensorThingsServi
 
 	public CsvLoaderOptions getCsvLoader() {
 		return csvLoader;
+	}
+
+	public String getCharset() {
+		return charset;
 	}
 
 	public String generateTestOutput(Feature feature) {
@@ -144,8 +154,16 @@ public class GeoJsonConverter implements AnnotatedConfigurable<SensorThingsServi
 		return result.toString();
 	}
 
-	private static String findMatch(String path, String deflt, Object source, boolean forUrl) {
-		String[] parts = StringUtils.split(path, '/');
+	private static String findMatch(final String path, final String deflt, final Object source, final boolean forUrl) {
+		boolean numeric = false;
+		final String realPath;
+		if (path.startsWith("N:")) {
+			numeric = true;
+			realPath = path.substring(2);
+		} else {
+			realPath = path;
+		}
+		String[] parts = StringUtils.split(realPath, '/');
 		Object value = source;
 		for (String part : parts) {
 			part = JsonUtils.DecodeJsonPointer(part);
@@ -165,6 +183,9 @@ public class GeoJsonConverter implements AnnotatedConfigurable<SensorThingsServi
 		}
 		String result = StringUtils.replace(value.toString(), "\"", "\\\"");
 		result = StringUtils.replace(result, "\n", "\\n");
+		if (numeric) {
+			result = UnitConverter.convertDecimalSeparator(result);
+		}
 		return result;
 	}
 

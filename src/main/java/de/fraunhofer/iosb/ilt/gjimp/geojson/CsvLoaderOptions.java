@@ -24,6 +24,7 @@ import de.fraunhofer.iosb.ilt.configurable.editor.EditorBoolean;
 import de.fraunhofer.iosb.ilt.configurable.editor.EditorInt;
 import de.fraunhofer.iosb.ilt.configurable.editor.EditorString;
 import de.fraunhofer.iosb.ilt.gjimp.utils.FrostUtils;
+import de.fraunhofer.iosb.ilt.gjimp.utils.UnitConverter;
 import de.fraunhofer.iosb.ilt.sta.service.SensorThingsService;
 import java.io.IOException;
 import java.math.BigDecimal;
@@ -51,11 +52,6 @@ public class CsvLoaderOptions implements AnnotatedConfigurable<SensorThingsServi
 			label = "Row Skip", description = "The number of rows to skip when reading the file (0=none).")
 	@EditorInt.EdOptsInt(dflt = 0, max = Integer.MAX_VALUE, min = 0, step = 1)
 	private Integer rowSkip;
-
-	@ConfigurableField(editor = EditorString.class, optional = true,
-			label = "Characterset", description = "The character set to use when parsing the csv file (default UTF-8).")
-	@EditorString.EdOptsString(dflt = "UTF-8")
-	private String charset;
 
 	@ConfigurableField(editor = EditorString.class, optional = true,
 			label = "Delimiter", description = "The character to use as delimiter ('\\t' for tab, default ',').")
@@ -125,8 +121,8 @@ public class CsvLoaderOptions implements AnnotatedConfigurable<SensorThingsServi
 			}
 			Feature feature = new Feature();
 			if (record.isMapped(colAxisOne) && record.isMapped(colAxisTwo)) {
-				BigDecimal axisOneValue = new BigDecimal(record.get(colAxisOne));
-				BigDecimal axisTwoValue = new BigDecimal(record.get(colAxisTwo));
+				BigDecimal axisOneValue = UnitConverter.stringToBigDecimal(record.get(colAxisOne));
+				BigDecimal axisTwoValue = UnitConverter.stringToBigDecimal(record.get(colAxisTwo));
 				Point point = FrostUtils.convertCoordinates(axisOneValue.doubleValue(), axisTwoValue.doubleValue(), getOrName(record, colCrs), numberScale);
 				feature.setGeometry(point);
 			}
