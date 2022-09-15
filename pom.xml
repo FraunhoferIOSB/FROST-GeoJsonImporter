@@ -23,19 +23,19 @@
 		<bintray.repo>Maven</bintray.repo>
 		<bintray.package>FROST-GeoJsonImporter</bintray.package>
 
-		<FROST-Client.version>0.39</FROST-Client.version>
+		<FROST-Client.version>0.43</FROST-Client.version>
 		<commons-collections.version>4.4</commons-collections.version>
 		<commons-csv.version>1.9.0</commons-csv.version>
 		<commons-io.version>2.11.0</commons-io.version>
-		<configurable.version>0.30</configurable.version>
+		<configurable.version>0.33</configurable.version>
 		<dockerfile-maven-plugin.version>1.4.13</dockerfile-maven-plugin.version>
-		<geotools.version>25.2</geotools.version>
+		<geotools.version>27.1</geotools.version>
 		<git-commit-id-plugin.version>4.9.10</git-commit-id-plugin.version>
 		<javax-activation.version>1.1.1</javax-activation.version>
 		<junit.version>4.13.2</junit.version>
-		<logback.version>1.2.6</logback.version>
-		<maven-shade-plugin.version>3.2.4</maven-shade-plugin.version>
-		<openjfx.version>17.0.0.1</openjfx.version>
+		<logback.version>1.4.1</logback.version>
+		<maven-shade-plugin.version>3.4.0</maven-shade-plugin.version>
+		<openjfx.version>19</openjfx.version>
 	</properties>
 
 	<organization>
