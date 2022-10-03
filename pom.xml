@@ -33,7 +33,7 @@
 		<git-commit-id-plugin.version>4.9.10</git-commit-id-plugin.version>
 		<javax-activation.version>1.1.1</javax-activation.version>
 		<junit.version>4.13.2</junit.version>
-		<logback.version>1.4.1</logback.version>
+		<logback.version>1.4.3</logback.version>
 		<maven-shade-plugin.version>3.4.0</maven-shade-plugin.version>
 		<openjfx.version>19</openjfx.version>
 	</properties>
