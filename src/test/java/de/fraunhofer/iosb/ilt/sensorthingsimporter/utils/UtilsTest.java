@@ -41,10 +41,10 @@ public class UtilsTest {
 	@Test
 	public void testCoordinateConversionXY() {
 		// 25832 has axis order = EAST, NORTH (X,Y)
-		Point point1 = FrostUtils.convertCoordinates(EXAMPLE_1_X, EXAMPLE_1_Y, EXAMPLE_1_SRS, 6);
+		Point point1 = new Point(FrostUtils.convertCoordinates(EXAMPLE_1_X, EXAMPLE_1_Y, EXAMPLE_1_SRS, 6));
 		Assert.assertEquals("Points 1 not the same", EXAMPLE_1_EXPECTED_GEOJSON, point1);
 
-		Point point2 = FrostUtils.convertCoordinates(EXAMPLE_2_Y, EXAMPLE_2_X, EXAMPLE_2_SRS, 6);
+		Point point2 = new Point(FrostUtils.convertCoordinates(EXAMPLE_2_Y, EXAMPLE_2_X, EXAMPLE_2_SRS, 6));
 		Assert.assertEquals("Points 2 not the same", EXAMPLE_2_EXPECTED_GEOJSON, point2);
 	}
 

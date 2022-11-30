@@ -41,7 +41,9 @@ import java.util.HashMap;
 import java.util.Map;
 import org.geojson.Feature;
 import org.geojson.GeoJsonObject;
+import org.geojson.MultiPolygon;
 import org.geojson.Point;
+import org.geojson.Polygon;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -208,13 +210,13 @@ public class CreatorLocation implements AnnotatedConfigurable<SensorThingsServic
 			return input;
 		}
 		if (input instanceof Point) {
-			Point point = (Point) input;
-			if (flipCoords) {
-				return FrostUtils.convertCoordinates(point.getCoordinates().getLongitude(), point.getCoordinates().getLatitude(), inputCrs, numberScale);
-			} else {
-				return FrostUtils.convertCoordinates(point.getCoordinates().getLatitude(), point.getCoordinates().getLongitude(), inputCrs, numberScale);
-			}
+			return FrostUtils.convertCoordinates((Point) input, inputCrs, numberScale, flipCoords);
+		} else if (input instanceof Polygon) {
+			return FrostUtils.convertCoordinates((Polygon) input, inputCrs, numberScale, flipCoords);
+		} else if (input instanceof MultiPolygon) {
+			return FrostUtils.convertCoordinates((MultiPolygon) input, inputCrs, numberScale, flipCoords);
 		}
+
 		return input;
 	}
 

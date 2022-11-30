@@ -123,7 +123,7 @@ public class CsvLoaderOptions implements AnnotatedConfigurable<SensorThingsServi
 			if (record.isMapped(colAxisOne) && record.isMapped(colAxisTwo)) {
 				BigDecimal axisOneValue = UnitConverter.stringToBigDecimal(record.get(colAxisOne));
 				BigDecimal axisTwoValue = UnitConverter.stringToBigDecimal(record.get(colAxisTwo));
-				Point point = FrostUtils.convertCoordinates(axisOneValue.doubleValue(), axisTwoValue.doubleValue(), getOrName(record, colCrs), numberScale);
+				Point point = new Point(FrostUtils.convertCoordinates(axisOneValue.doubleValue(), axisTwoValue.doubleValue(), getOrName(record, colCrs), numberScale));
 				feature.setGeometry(point);
 			}
 			Map properties = record.toMap();

@@ -50,10 +50,11 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import javax.xml.crypto.dsig.TransformException;
 import org.geojson.GeoJsonObject;
 import org.geojson.LngLatAlt;
+import org.geojson.MultiPolygon;
 import org.geojson.Point;
+import org.geojson.Polygon;
 import org.geotools.geometry.DirectPosition2D;
 import org.geotools.referencing.CRS;
 import org.opengis.geometry.MismatchedDimensionException;
@@ -855,9 +856,81 @@ public final class FrostUtils {
 		return new TimeObject(interval);
 	}
 
-	public static Point convertCoordinates(final double first, final double second, final String crsName, int numberScale) {
+	/**
+	 * Convert the Polygon with the given CRS into a Point in EPSG:4326.
+	 *
+	 * @param input The input to convert.
+	 * @param crsName The CRS to convert from.
+	 * @param numberScale The scale of the resulting numbers.
+	 * @param flip Flip the lat & lng coordinates before conversion.
+	 * @return A Polygon in EPSG:4326 coordinates.
+	 */
+	public static Polygon convertCoordinates(final Polygon input, final String crsName, int numberScale, boolean flip) {
+		List<List<LngLatAlt>> inCoords = input.getCoordinates();
+		List<List<LngLatAlt>> outCoords = new ArrayList<>();
+		for (List<LngLatAlt> inOne : inCoords) {
+			List<LngLatAlt> outOne = new ArrayList<>();
+			outCoords.add(outOne);
+			for (LngLatAlt lla : inOne) {
+				outOne.add(FrostUtils.convertCoordinates(lla, crsName, numberScale, flip));
+			}
+		}
+		Polygon output = new Polygon();
+		output.setCoordinates(outCoords);
+		return output;
+	}
+
+	/**
+	 * Convert the MultiPolygon with the given CRS into a Point in EPSG:4326.
+	 *
+	 * @param input The input to convert.
+	 * @param crsName The CRS to convert from.
+	 * @param numberScale The scale of the resulting numbers.
+	 * @param flip Flip the lat & lng coordinates before conversion.
+	 * @return A MultiPolygon in EPSG:4326 coordinates.
+	 */
+	public static MultiPolygon convertCoordinates(final MultiPolygon input, final String crsName, int numberScale, boolean flip) {
+		List<List<List<LngLatAlt>>> inCoords = input.getCoordinates();
+		List<List<List<LngLatAlt>>> outCoords = new ArrayList<>();
+		for (List<List<LngLatAlt>> inOne : inCoords) {
+			List<List<LngLatAlt>> outOne = new ArrayList<>();
+			outCoords.add(outOne);
+			for (List<LngLatAlt> inTwo : inOne) {
+				List<LngLatAlt> outTwo = new ArrayList<>();
+				outOne.add(outTwo);
+				for (LngLatAlt inThree : inTwo) {
+					outTwo.add(FrostUtils.convertCoordinates(inThree, crsName, numberScale, flip));
+				}
+			}
+		}
+		MultiPolygon output = new MultiPolygon();
+		output.setCoordinates(outCoords);
+		return output;
+	}
+
+	/**
+	 * Convert the Point with the given CRS into a Point in EPSG:4326.
+	 *
+	 * @param input The input to convert.
+	 * @param crsName The CRS to convert from.
+	 * @param numberScale The scale of the resulting numbers.
+	 * @param flip Flip the lat & lng coordinates before conversion.
+	 * @return A Point in EPSG:4326 coordinates.
+	 */
+	public static Point convertCoordinates(final Point input, final String crsName, int numberScale, boolean flip) {
+		return new Point(convertCoordinates(input.getCoordinates(), crsName, numberScale, flip));
+	}
+
+	public static LngLatAlt convertCoordinates(final LngLatAlt input, final String crsName, int numberScale, boolean flip) {
+		if (flip) {
+			return convertCoordinates(input.getLongitude(), input.getLatitude(), crsName, numberScale);
+		}
+		return convertCoordinates(input.getLatitude(), input.getLongitude(), crsName, numberScale);
+	}
+
+	public static LngLatAlt convertCoordinates(final double first, final double second, final String crsName, int numberScale) {
 		if (Utils.isNullOrEmpty(crsName)) {
-			return new Point(
+			return new LngLatAlt(
 					new BigDecimal(second).setScale(numberScale, RoundingMode.HALF_EVEN).doubleValue(),
 					new BigDecimal(first).setScale(numberScale, RoundingMode.HALF_EVEN).doubleValue());
 		}
@@ -872,7 +945,7 @@ public final class FrostUtils {
 			final DirectPosition2D sourcePoint = new DirectPosition2D(sourceCrs, first, second);
 			final DirectPosition2D targetPoint = new DirectPosition2D(targetCrs);
 			transform.transform(sourcePoint, targetPoint);
-			return new Point(
+			return new LngLatAlt(
 					new BigDecimal(targetPoint.y).setScale(numberScale, RoundingMode.HALF_EVEN).doubleValue(),
 					new BigDecimal(targetPoint.x).setScale(numberScale, RoundingMode.HALF_EVEN).doubleValue());
 		} catch (FactoryException | MismatchedDimensionException | org.opengis.referencing.operation.TransformException exc) {
@@ -883,9 +956,9 @@ public final class FrostUtils {
 	public static Point convertCoordinates(final String locationPos, final String locationSrsName, int numberScale, boolean flip) {
 		final String[] coordinates = locationPos.split(" ");
 		if (flip) {
-			return convertCoordinates(Double.parseDouble(coordinates[1]), Double.parseDouble(coordinates[0]), locationSrsName, numberScale);
+			return new Point(convertCoordinates(Double.parseDouble(coordinates[1]), Double.parseDouble(coordinates[0]), locationSrsName, numberScale));
 		} else {
-			return convertCoordinates(Double.parseDouble(coordinates[0]), Double.parseDouble(coordinates[1]), locationSrsName, numberScale);
+			return new Point(convertCoordinates(Double.parseDouble(coordinates[0]), Double.parseDouble(coordinates[1]), locationSrsName, numberScale));
 		}
 	}
 

@@ -24,6 +24,7 @@ import de.fraunhofer.iosb.ilt.configurable.ConfigurationException;
 import de.fraunhofer.iosb.ilt.configurable.annotations.ConfigurableClass;
 import de.fraunhofer.iosb.ilt.configurable.annotations.ConfigurableField;
 import de.fraunhofer.iosb.ilt.configurable.editor.EditorClass;
+import de.fraunhofer.iosb.ilt.configurable.editor.EditorList;
 import de.fraunhofer.iosb.ilt.configurable.editor.EditorString;
 import de.fraunhofer.iosb.ilt.gjimp.StaService;
 import de.fraunhofer.iosb.ilt.gjimp.utils.FrostUtils;
@@ -77,10 +78,11 @@ public class GeoJsonConverter implements AnnotatedConfigurable<SensorThingsServi
 	@EditorClass.EdOptsClass(clazz = CreatorThing.class)
 	private CreatorThing creatorThings;
 
-	@ConfigurableField(editor = EditorClass.class, optional = true,
+	@ConfigurableField(editor = EditorList.class, optional = true,
 			label = "ObsProps", description = "The definition of how to create ObservedProperties.")
+	@EditorList.EdOptsList(editor = EditorClass.class)
 	@EditorClass.EdOptsClass(clazz = CreatorObservedProperty.class)
-	private CreatorObservedProperty creatorObservedProperties;
+	private List<CreatorObservedProperty> creatorObservedProperties;
 
 	@ConfigurableField(editor = EditorClass.class, optional = true,
 			label = "CSV Loader", description = "The definition of if and how to load CSV.")
@@ -106,19 +108,23 @@ public class GeoJsonConverter implements AnnotatedConfigurable<SensorThingsServi
 	}
 
 	public String generateTestOutput(Feature feature) {
-		return new StringBuilder()
+		final StringBuilder output = new StringBuilder()
 				.append(creatorLocations.generateTestOutput(feature))
 				.append('\n')
-				.append(creatorThings.generateTestOutput(feature))
-				.append('\n')
-				.append(creatorObservedProperties.generateTestOutput(feature))
+				.append(creatorThings.generateTestOutput(feature));
+		for (var cop : creatorObservedProperties) {
+			output.append('\n').append(cop.generateTestOutput(feature));
+		}
+		return output
 				.toString();
 	}
 
 	public void importAll(FeatureCollection collection, ProgressTracker tracker) {
 		creatorLocations.loadCache(tracker);
 		creatorThings.loadCache(tracker);
-		creatorObservedProperties.loadCache(tracker);
+		for (var cop : creatorObservedProperties) {
+			cop.loadCache(tracker);
+		}
 
 		List<Feature> features = collection.getFeatures();
 		int total = features.size();
@@ -136,7 +142,9 @@ public class GeoJsonConverter implements AnnotatedConfigurable<SensorThingsServi
 	public void importFeature(Feature feature) throws JsonProcessingException, ServiceFailureException {
 		Location location = creatorLocations.createLocation(feature, frostUtils);
 		creatorThings.createThing(feature, location, frostUtils);
-		creatorObservedProperties.createObservedProperty(feature, location, frostUtils);
+		for (var cop : creatorObservedProperties) {
+			cop.createObservedProperty(feature, location, frostUtils);
+		}
 	}
 
 	public static String fillTemplate(String template, Object feature, boolean forUrl) {
