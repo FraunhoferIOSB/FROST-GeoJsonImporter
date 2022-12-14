@@ -4,7 +4,7 @@
 
 	<groupId>de.fraunhofer.iosb.ilt</groupId>
 	<artifactId>FROST-GeoJsonImporter</artifactId>
-	<version>0.2</version>
+	<version>0.3-SNAPSHOT</version>
 	<packaging>jar</packaging>
 
 	<name>FROST-GeoJsonImporter</name>
@@ -47,7 +47,7 @@
 		<url>https://github.com/hylkevds/FROST-GeoJsonImporter</url>
 		<connection>scm:git:git@github.com:hylkevds/FROST-GeoJsonImporter.git</connection>
 		<developerConnection>scm:git:git@github.com:hylkevds/FROST-GeoJsonImporter.git</developerConnection>
-		<tag>v0.2</tag>
+		<tag>HEAD</tag>
 	</scm>
 
 	<issueManagement>
