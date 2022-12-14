@@ -18,7 +18,7 @@ java -jar FROST-GeoJsonImporter-0.1-shaded.jar
 
 The GeoJSON Importer takes a GeoJSON file containing a Feature collection, parses each feature in turn, and create a SensorThings Location and (optionally) a Thing for each Feature.
 
-1. First it loads a cache of existing Locations and Things from the target SensorThings API service.
+1. First it loads a cache of existing Entities from the target SensorThings API service.
    Which Entities are loaded depends on the `CacheFilter` that is used. Each entity is assigned a key, based on the `CacheKey` template.
 2. For each Feature it creates a Location Entity, generating name, description and properties using the respective templates.
 3. It checks the cache to see if the generated Entity already exists on the server, by searching it based on the `CacheKey` template.
@@ -58,25 +58,31 @@ The following configuration can be used to import NUTS regions as distributed by
 
 ```
 {
-  "creatorThings": {
-    "cacheFilter": "properties/type eq 'NUTS'",
-    "keepLocations": true,
-    "templateName": "{properties/NUTS_NAME}",
-    "templateProperties": "{\n  \"type\": \"NUTS\",\n  \"level\": {properties/LEVL_CODE},\n  \"countryCode\": \"{properties/CNTR_CODE}\",\n  \"nutsId\": \"{id}\",\n  \"nutsName\": \"{properties/NUTS_NAME}\",\n  \"nutsNameLatin\": \"{properties/NAME_LATN}\",\n  \"source\": \"https://ec.europa.eu/eurostat/de/web/gisco/geodata/reference-data/administrative-units-statistical-units/nuts\"\n}",
-    "templateDescription": "NUTS region {id}: {properties/NUTS_NAME}",
-    "templateEqualsFilter": "properties/type eq 'NUTS' and properties/nutsId eq '{properties/nutsId}'",
-    "templateCacheKey": "{properties/type}-{properties/nutsId}"
-  },
-  "creatorLocations": {
-    "cacheFilter": "properties/type eq 'NUTS' and properties/scale eq 10",
-    "templateName": "{properties/NUTS_ID}",
-    "templateProperties": "{\n  \"type\": \"NUTS\",\n  \"level\": {properties/LEVL_CODE},\n  \"scale\": 10,\n  \"countryCode\": \"{properties/CNTR_CODE}\",\n  \"nutsId\": \"{id}\",\n  \"nutsName\": \"{properties/NUTS_NAME}\",\n  \"nutsNameLatin\": \"{properties/NAME_LATN}\",\n  \"source\": \"https://ec.europa.eu/eurostat/de/web/gisco/geodata/reference-data/administrative-units-statistical-units/nuts\"\n}",
-    "templateDescription": "NUTS region {id}: {properties/NUTS_NAME}",
-    "templateEqualsFilter": "properties/type eq '{properties/type}' and properties/nutsId eq '{properties/nutsId}' and properties/scale eq {properties/scale}",
-    "templateCacheKey": "{properties/type}-{properties/nutsId}"
+  "caches": {
+    "cacheThings": {
+      "cacheFilter": "properties/type eq \u0027NUTS\u0027",
+      "templateCacheKey": "{properties/type}-{properties/nutsId}"
+    },
+    "cacheLocations": {
+      "cacheFilter": "properties/type eq \u0027NUTS\u0027",
+      "templateCacheKey": "{properties/type}-{properties/nutsId}"
+    }
   },
   "uploader": {
     "serviceUrl": "http://localhost:8080/FROST-Server/v1.1"
+  },
+  "creatorLocations": {
+    "templateName": "{properties/NUTS_ID}",
+    "templateDescription": "NUTS region {id}: {properties/NUTS_NAME}",
+    "templateProperties": "{\n  \"type\": \"NUTS\",\n  \"level\": {properties/LEVL_CODE},\n  \"scale\": 10,\n  \"countryCode\": \"{properties/CNTR_CODE}\",\n  \"nutsId\": \"{id}\",\n  \"nutsName\": \"{properties/NUTS_NAME}\",\n  \"nutsNameLatin\": \"{properties/NAME_LATN}\",\n  \"source\": \"https://ec.europa.eu/eurostat/de/web/gisco/geodata/reference-data/administrative-units-statistical-units/nuts\"\n}",
+    "templateEqualsFilter": "properties/type eq \u0027{properties/type}\u0027 and properties/nutsId eq \u0027{properties/nutsId}\u0027 and properties/scale eq {properties/scale}"
+  },
+  "creatorThings": {
+    "keepLocations": true,
+    "templateName": "{properties/NUTS_NAME}",
+    "templateDescription": "NUTS region {id}: {properties/NUTS_NAME}",
+    "templateProperties": "{\n  \"type\": \"NUTS\",\n  \"level\": {properties/LEVL_CODE},\n  \"countryCode\": \"{properties/CNTR_CODE}\",\n  \"nutsId\": \"{id}\",\n  \"nutsName\": \"{properties/NUTS_NAME}\",\n  \"nutsNameLatin\": \"{properties/NAME_LATN}\",\n  \"source\": \"https://ec.europa.eu/eurostat/de/web/gisco/geodata/reference-data/administrative-units-statistical-units/nuts\"\n}",
+    "templateEqualsFilter": "properties/type eq \u0027NUTS\u0027 and properties/nutsId eq \u0027{properties/nutsId}\u0027"
   }
 }
 ```
