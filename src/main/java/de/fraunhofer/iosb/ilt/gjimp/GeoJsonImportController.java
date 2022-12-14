@@ -23,10 +23,12 @@ import com.google.gson.GsonBuilder;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
 import de.fraunhofer.iosb.ilt.configurable.ConfigurationException;
+import de.fraunhofer.iosb.ilt.configurable.Utils;
 import de.fraunhofer.iosb.ilt.configurable.editor.EditorClass;
 import de.fraunhofer.iosb.ilt.gjimp.geojson.CsvLoaderOptions;
 import de.fraunhofer.iosb.ilt.gjimp.geojson.GeoJsonConverter;
 import de.fraunhofer.iosb.ilt.gjimp.utils.ProgressTracker;
+import de.fraunhofer.iosb.ilt.sta.ServiceFailureException;
 import de.fraunhofer.iosb.ilt.sta.jackson.ObjectMapperFactory;
 import de.fraunhofer.iosb.ilt.sta.service.SensorThingsService;
 import java.io.File;
@@ -36,8 +38,6 @@ import java.util.List;
 import java.util.ResourceBundle;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 import javafx.concurrent.Task;
 import javafx.event.ActionEvent;
 import javafx.fxml.FXML;
@@ -107,7 +107,11 @@ public class GeoJsonImportController implements Initializable {
 	}
 
 	private void loadImporter() {
-		JsonElement json = toJsonElement(loadFromFile("Load Importer", null, "UTF-8"));
+		final String fileData = loadFromFile("Load Importer", null, "UTF-8");
+		if (Utils.isNullOrEmpty(fileData)) {
+			return;
+		}
+		JsonElement json = toJsonElement(fileData);
 		if (json == null) {
 			return;
 		}
@@ -279,7 +283,7 @@ public class GeoJsonImportController implements Initializable {
 	}
 
 	@FXML
-	private void actionImport(ActionEvent event) throws ConfigurationException {
+	private void actionImport(ActionEvent event) {
 		buttonImport.setDisable(true);
 
 		Task<Void> task = new Task<Void>() {
@@ -288,7 +292,7 @@ public class GeoJsonImportController implements Initializable {
 				updateProgress(0, 100);
 				try {
 					runImport(this::updateProgress);
-				} catch (ConfigurationException | RuntimeException ex) {
+				} catch (ConfigurationException | RuntimeException | ImportException ex) {
 					LOGGER.error("Failed to import.", ex);
 				}
 				updateProgress(100, 100);
@@ -300,7 +304,7 @@ public class GeoJsonImportController implements Initializable {
 		executor.submit(task);
 	}
 
-	private void runImport(ProgressTracker tracker) throws ConfigurationException {
+	private void runImport(ProgressTracker tracker) throws ConfigurationException, ServiceFailureException, ImportException {
 		if (collection == null) {
 			return;
 		}

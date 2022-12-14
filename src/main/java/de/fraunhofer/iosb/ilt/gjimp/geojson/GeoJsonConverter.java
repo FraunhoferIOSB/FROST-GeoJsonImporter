@@ -26,22 +26,20 @@ import de.fraunhofer.iosb.ilt.configurable.annotations.ConfigurableField;
 import de.fraunhofer.iosb.ilt.configurable.editor.EditorClass;
 import de.fraunhofer.iosb.ilt.configurable.editor.EditorList;
 import de.fraunhofer.iosb.ilt.configurable.editor.EditorString;
+import de.fraunhofer.iosb.ilt.configurable.editor.EditorSubclass;
+import de.fraunhofer.iosb.ilt.gjimp.ImportException;
 import de.fraunhofer.iosb.ilt.gjimp.StaService;
+import de.fraunhofer.iosb.ilt.gjimp.utils.Caches;
 import de.fraunhofer.iosb.ilt.gjimp.utils.FrostUtils;
-import de.fraunhofer.iosb.ilt.gjimp.utils.JsonUtils;
+import de.fraunhofer.iosb.ilt.gjimp.utils.ObservationUploader;
 import de.fraunhofer.iosb.ilt.gjimp.utils.ProgressTracker;
-import de.fraunhofer.iosb.ilt.gjimp.utils.UnitConverter;
+import de.fraunhofer.iosb.ilt.gjimp.validator.Validator;
 import de.fraunhofer.iosb.ilt.sta.ServiceFailureException;
-import de.fraunhofer.iosb.ilt.sta.Utils;
 import de.fraunhofer.iosb.ilt.sta.model.Location;
+import de.fraunhofer.iosb.ilt.sta.model.Observation;
 import de.fraunhofer.iosb.ilt.sta.service.SensorThingsService;
-import java.lang.reflect.InvocationTargetException;
+import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-import org.apache.commons.lang3.StringUtils;
-import org.apache.commons.lang3.reflect.MethodUtils;
 import org.geojson.Feature;
 import org.geojson.FeatureCollection;
 import org.slf4j.Logger;
@@ -56,7 +54,10 @@ public class GeoJsonConverter implements AnnotatedConfigurable<SensorThingsServi
 
 	private static final Logger LOGGER = LoggerFactory.getLogger(GeoJsonConverter.class.getName());
 
-	private static final Pattern PLACE_HOLDER_PATTERN = Pattern.compile("\\{([^|{}]+)(\\|([^}]*))?\\}");
+	@ConfigurableField(editor = EditorClass.class, optional = false,
+			label = "Caches", description = "The various caches to use for loading entities.")
+	@EditorClass.EdOptsClass(clazz = Caches.class)
+	private Caches caches;
 
 	@ConfigurableField(editor = EditorString.class, optional = true,
 			label = "Characterset", description = "The character set to use when parsing the csv file (default UTF-8).")
@@ -79,10 +80,33 @@ public class GeoJsonConverter implements AnnotatedConfigurable<SensorThingsServi
 	private CreatorThing creatorThings;
 
 	@ConfigurableField(editor = EditorList.class, optional = true,
-			label = "ObsProps", description = "The definition of how to create ObservedProperties.")
+			label = "ObsProps", description = "The definitions of how to create ObservedProperties.")
 	@EditorList.EdOptsList(editor = EditorClass.class)
 	@EditorClass.EdOptsClass(clazz = CreatorObservedProperty.class)
 	private List<CreatorObservedProperty> creatorObservedProperties;
+
+	@ConfigurableField(editor = EditorList.class, optional = true,
+			label = "Sensors", description = "The definitions of how to create Sensors.")
+	@EditorList.EdOptsList(editor = EditorClass.class)
+	@EditorClass.EdOptsClass(clazz = CreatorSensor.class)
+	private List<CreatorSensor> creatorSensors;
+
+	@ConfigurableField(editor = EditorList.class, optional = true,
+			label = "Datastreams", description = "The definitions of how to create Datastreams.")
+	@EditorList.EdOptsList(editor = EditorClass.class)
+	@EditorClass.EdOptsClass(clazz = CreatorDatastream.class)
+	private List<CreatorDatastream> creatorDatastreams;
+
+	@ConfigurableField(editor = EditorList.class, optional = true,
+			label = "Observations", description = "The definitions of how to create Observations.")
+	@EditorList.EdOptsList(editor = EditorClass.class)
+	@EditorClass.EdOptsClass(clazz = CreatorObservation.class)
+	private List<CreatorObservation> creatorObservations;
+
+	@ConfigurableField(editor = EditorSubclass.class, optional = true,
+			label = "Validator", description = "The validator to use.")
+	@EditorSubclass.EdOptsSubclass(iface = Validator.class)
+	private Validator validator;
 
 	@ConfigurableField(editor = EditorClass.class, optional = true,
 			label = "CSV Loader", description = "The definition of if and how to load CSV.")
@@ -109,113 +133,98 @@ public class GeoJsonConverter implements AnnotatedConfigurable<SensorThingsServi
 
 	public String generateTestOutput(Feature feature) {
 		final StringBuilder output = new StringBuilder()
-				.append(creatorLocations.generateTestOutput(feature))
+				.append(creatorLocations.generateTestOutput(feature, caches))
 				.append('\n')
-				.append(creatorThings.generateTestOutput(feature));
-		for (var cop : creatorObservedProperties) {
-			output.append('\n').append(cop.generateTestOutput(feature));
+				.append(creatorThings.generateTestOutput(feature, caches));
+		for (var cr : creatorObservedProperties) {
+			output.append('\n').append(cr.generateTestOutput(feature, caches));
+		}
+		for (var cr : creatorSensors) {
+			output.append('\n').append(cr.generateTestOutput(feature, caches));
+		}
+		for (var cr : creatorDatastreams) {
+			output.append('\n').append(cr.generateTestOutput(feature, caches));
+		}
+		for (var cr : creatorObservations) {
+			output.append('\n').append(cr.generateTestOutput(feature, caches));
 		}
 		return output
 				.toString();
 	}
 
-	public void importAll(FeatureCollection collection, ProgressTracker tracker) {
-		creatorLocations.loadCache(tracker);
-		creatorThings.loadCache(tracker);
+	public void importAll(FeatureCollection collection, ProgressTracker tracker) throws ImportException, ServiceFailureException {
+		caches.loadAll(tracker);
+
 		for (var cop : creatorObservedProperties) {
-			cop.loadCache(tracker);
+			if (cop.isEvaluatedOnce()) {
+				try {
+					cop.createObservedProperty(null, frostUtils, caches);
+				} catch (JsonProcessingException ex) {
+					throw new ImportException(ex);
+				}
+			}
+		}
+		for (var cs : creatorSensors) {
+			if (cs.isEvaluatedOnce()) {
+				try {
+					cs.createSensor(null, frostUtils, caches);
+				} catch (JsonProcessingException ex) {
+					throw new ImportException(ex);
+				}
+			}
 		}
 
+		List<Observation> obs = new ArrayList<>();
 		List<Feature> features = collection.getFeatures();
 		int total = features.size();
 		int count = 0;
 		tracker.updateProgress(count, total);
 		for (Feature feature : features) {
 			try {
-				importFeature(feature);
+				importFeature(feature, obs);
 				tracker.updateProgress(++count, total);
 			} catch (JsonProcessingException | ServiceFailureException ex) {
+				throw new ImportException(ex);
 			}
 		}
+		LOGGER.info("Generated {} Observations.", obs.size());
+		ObservationUploader ul = new ObservationUploader(service, true, 100);
+		if (validator != null) {
+			validator.setObservationUploader(ul);
+			for (var o : obs) {
+				if (validator.isValid(o)) {
+					ul.addObservation(o);
+				}
+			}
+		}
+		long uploaded = ul.sendDataArray();
+		LOGGER.info("Uploaded {} Observations.", uploaded);
 	}
 
-	public void importFeature(Feature feature) throws JsonProcessingException, ServiceFailureException {
-		Location location = creatorLocations.createLocation(feature, frostUtils);
-		creatorThings.createThing(feature, location, frostUtils);
+	public void importFeature(Feature feature, List<Observation> obs) throws JsonProcessingException, ServiceFailureException, ImportException {
+		Location location = creatorLocations.createLocation(feature, frostUtils, caches);
+		creatorThings.createThing(feature, location, frostUtils, caches);
 		for (var cop : creatorObservedProperties) {
-			cop.createObservedProperty(feature, location, frostUtils);
-		}
-	}
-
-	public static String fillTemplate(String template, Object feature, boolean forUrl) {
-		Matcher matcher = PLACE_HOLDER_PATTERN.matcher(template);
-		matcher.reset();
-		StringBuilder result = new StringBuilder();
-		int pos = 0;
-		while (matcher.find()) {
-			int start = matcher.start();
-			result.append(template.substring(pos, start));
-			result.append(findMatch(matcher.group(1), matcher.group(3), feature, forUrl));
-			pos = matcher.end();
-		}
-		result.append(template.substring(pos));
-		return result.toString();
-	}
-
-	private static String findMatch(final String path, final String deflt, final Object source, final boolean forUrl) {
-		boolean numeric = false;
-		final String realPath;
-		if (path.startsWith("N:")) {
-			numeric = true;
-			realPath = path.substring(2);
-		} else {
-			realPath = path;
-		}
-		String[] parts = StringUtils.split(realPath, '/');
-		Object value = source;
-		for (String part : parts) {
-			part = JsonUtils.DecodeJsonPointer(part);
-			value = getFrom(part, value);
-			if (value == null) {
-				return deflt;
+			if (!cop.isEvaluatedOnce()) {
+				cop.createObservedProperty(feature, frostUtils, caches);
 			}
 		}
-		if (value instanceof Map || value instanceof List || value == null) {
-			return deflt;
-		}
-		if (Utils.isNullOrEmpty(value.toString())) {
-			return deflt;
-		}
-		if (forUrl) {
-			return Utils.escapeForStringConstant(value.toString());
-		}
-		String result = StringUtils.replace(value.toString(), "\"", "\\\"");
-		result = StringUtils.replace(result, "\n", "\\n");
-		if (numeric) {
-			result = UnitConverter.convertDecimalSeparator(result);
-		}
-		return result;
-	}
-
-	private static Object getFrom(String field, Object source) {
-		if (source instanceof Map) {
-			Map map = (Map) source;
-			return map.get(field);
-		} else if (source instanceof List) {
-			List list = (List) source;
-			try {
-				Integer idx = Integer.valueOf(field);
-				return list.get(idx);
-			} catch (NumberFormatException ex) {
-				return null;
+		for (var cs : creatorSensors) {
+			if (!cs.isEvaluatedOnce()) {
+				cs.createSensor(feature, frostUtils, caches);
 			}
 		}
-		String getterName = "get" + field.substring(0, 1).toUpperCase() + field.substring(1);
-		try {
-			return MethodUtils.invokeMethod(source, getterName);
-		} catch (NoSuchMethodException | IllegalAccessException | InvocationTargetException ex) {
-			LOGGER.trace("Failed to execute getter {} on {}", getterName, source, ex);
-			return null;
+		for (var cd : creatorDatastreams) {
+			cd.createDatastream(feature, frostUtils, caches);
+		}
+		if (!creatorObservations.isEmpty()) {
+			for (var co : creatorObservations) {
+				var o = co.createObservation(feature, frostUtils, caches);
+				if (o != null) {
+					obs.add(o);
+				}
+			}
 		}
 	}
+
 }

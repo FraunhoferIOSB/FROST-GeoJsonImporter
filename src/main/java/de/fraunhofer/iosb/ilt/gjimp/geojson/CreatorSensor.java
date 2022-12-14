@@ -27,15 +27,12 @@ import de.fraunhofer.iosb.ilt.configurable.annotations.ConfigurableField;
 import de.fraunhofer.iosb.ilt.configurable.editor.EditorBoolean;
 import de.fraunhofer.iosb.ilt.configurable.editor.EditorString;
 import de.fraunhofer.iosb.ilt.gjimp.utils.Caches;
-import de.fraunhofer.iosb.ilt.gjimp.utils.EntityCache;
 import de.fraunhofer.iosb.ilt.gjimp.utils.FrostUtils;
-import static de.fraunhofer.iosb.ilt.gjimp.utils.FrostUtils.ENCODING_GEOJSON;
 import de.fraunhofer.iosb.ilt.gjimp.utils.JsonUtils;
 import static de.fraunhofer.iosb.ilt.gjimp.utils.TemplateUtils.fillTemplate;
 import de.fraunhofer.iosb.ilt.sta.ServiceFailureException;
 import de.fraunhofer.iosb.ilt.sta.jackson.ObjectMapperFactory;
-import de.fraunhofer.iosb.ilt.sta.model.Location;
-import de.fraunhofer.iosb.ilt.sta.model.ObservedProperty;
+import de.fraunhofer.iosb.ilt.sta.model.Sensor;
 import de.fraunhofer.iosb.ilt.sta.service.SensorThingsService;
 import java.util.Collections;
 import java.util.HashMap;
@@ -49,9 +46,9 @@ import org.slf4j.LoggerFactory;
  * @author hylke
  */
 @ConfigurableClass
-public class CreatorObservedProperty implements AnnotatedConfigurable<SensorThingsService, Object> {
+public class CreatorSensor implements AnnotatedConfigurable<SensorThingsService, Object> {
 
-	private static final Logger LOGGER = LoggerFactory.getLogger(CreatorObservedProperty.class.getName());
+	private static final Logger LOGGER = LoggerFactory.getLogger(CreatorSensor.class.getName());
 
 	@ConfigurableField(editor = EditorString.class, optional = false,
 			label = "Name Template", description = "Template used to generate the name, using {path/to/field|default} placeholders.")
@@ -59,14 +56,19 @@ public class CreatorObservedProperty implements AnnotatedConfigurable<SensorThin
 	private String templateName;
 
 	@ConfigurableField(editor = EditorString.class, optional = false,
-			label = "Definition Template", description = "Template used to generate the definition, using {path/to/field|default} placeholders.")
-	@EditorString.EdOptsString(lines = 1)
-	private String templateDefinition;
-
-	@ConfigurableField(editor = EditorString.class, optional = false,
 			label = "Description Template", description = "Template used to generate the description, using {path/to/field|default} placeholders.")
 	@EditorString.EdOptsString(lines = 3)
 	private String templateDescription;
+
+	@ConfigurableField(editor = EditorString.class, optional = false,
+			label = "Encoding Template", description = "Template used to generate the encoding type, using {path/to/field|default} placeholders.")
+	@EditorString.EdOptsString(lines = 1)
+	private String templateEncoding;
+
+	@ConfigurableField(editor = EditorString.class, optional = false,
+			label = "Metadata Template", description = "Template used to generate the metadata, using {path/to/field|default} placeholders.")
+	@EditorString.EdOptsString(lines = 3)
+	private String templateMetadata;
 
 	@ConfigurableField(editor = EditorString.class, optional = true,
 			label = "Properties Template", description = "Template used to generate the properties, using {path/to/field|default} placeholders.")
@@ -78,15 +80,15 @@ public class CreatorObservedProperty implements AnnotatedConfigurable<SensorThin
 	@EditorString.EdOptsString(lines = 1, dflt = "name eq '{name|-}'")
 	private String templateEqualsFilter;
 
-	@ConfigurableField(editor = EditorString.class, optional = true,
-			label = "If Not Empty", description = "Template that must result in a non-empty value for the Entity to be created, using {path.to.field|default} placeholders.")
-	@EditorString.EdOptsString(lines = 1, dflt = "")
-	private String ifNotEmptyTemplate;
-
 	@ConfigurableField(editor = EditorBoolean.class, optional = false,
 			label = "Evaluate Once", description = "Evaluate this ObservedProperty once per file, or for each feature found.")
 	@EditorBoolean.EdOptsBool()
 	private boolean evaluatedOnce = false;
+
+	@ConfigurableField(editor = EditorString.class, optional = true,
+			label = "If Not Empty", description = "Template that must result in a non-empty value for the Entity to be created, using {path.to.field|default} placeholders.")
+	@EditorString.EdOptsString(lines = 1, dflt = "")
+	private String ifNotEmptyTemplate;
 
 	private SensorThingsService service;
 
@@ -102,15 +104,16 @@ public class CreatorObservedProperty implements AnnotatedConfigurable<SensorThin
 
 	public String generateTestOutput(Feature feature, Caches caches) {
 		if (templateName.isEmpty()) {
-			return "ObservedProperty not configured.\n";
+			return "Sensor not configured.\n";
 		}
 		if (!ifNotEmptyTemplate.isBlank() && fillTemplate(ifNotEmptyTemplate, feature, false).isBlank()) {
-			return "ObservedProperty:\n  ifNotEmpty Template is empty.\n";
+			return "Sensor:\n  ifNotEmpty Template is empty.\n";
 		}
 
 		String name = fillTemplate(templateName, feature, false);
 		String description = fillTemplate(templateDescription, feature, false);
-		String definition = fillTemplate(templateDefinition, feature, false);
+		String encoding = fillTemplate(templateEncoding, feature, false);
+		String metadata = fillTemplate(templateMetadata, feature, false);
 		String propertiesString = fillTemplate(templateProperties, feature, false);
 
 		Map<String, Object> properties = null;
@@ -124,17 +127,16 @@ public class CreatorObservedProperty implements AnnotatedConfigurable<SensorThin
 			}
 		}
 
-		Location newLocation = new Location(name, description, ENCODING_GEOJSON, feature.getGeometry());
-		newLocation.setProperties(properties);
+		Sensor newSensor = FrostUtils.buildSensor(name, description, encoding, metadata, properties);
+		String equalsFilter = fillTemplate(templateEqualsFilter, newSensor, true);
+		String cacheKey = fillTemplate(caches.getCacheSensors().getTemplateCacheKey(), newSensor, false);
 
-		String equalsFilter = fillTemplate(templateEqualsFilter, newLocation, true);
-		String cacheKey = fillTemplate(caches.getCacheObservedProperties().getTemplateCacheKey(), newLocation, false);
-
-		StringBuilder output = new StringBuilder("ObservedProperty:\n");
-		output.append("  Name: ").append(name).append('\n')
-				.append("  Description: ").append(description).append('\n')
-				.append("  Definition: ").append(definition).append('\n')
-				.append("  Properties: ").append(propertiesString).append('\n')
+		StringBuilder output = new StringBuilder("Sensor:\n");
+		output.append("  name: ").append(name).append('\n')
+				.append("  description: ").append(description).append('\n')
+				.append("  properties: ").append(propertiesString).append('\n')
+				.append("  encoding: ").append(encoding).append('\n')
+				.append("  metadata: ").append(metadata).append('\n')
 				.append('\n')
 				.append("  Equals Filter: ").append(equalsFilter).append('\n')
 				.append("  Cache Key: ").append(cacheKey).append('\n');
@@ -142,7 +144,7 @@ public class CreatorObservedProperty implements AnnotatedConfigurable<SensorThin
 		return output.toString();
 	}
 
-	public ObservedProperty createObservedProperty(Feature feature, FrostUtils frostUtils, Caches caches) throws JsonProcessingException, ServiceFailureException {
+	public Sensor createSensor(Feature feature, FrostUtils frostUtils, Caches caches) throws JsonProcessingException, ServiceFailureException {
 		if (templateName.isEmpty()) {
 			return null;
 		}
@@ -151,26 +153,25 @@ public class CreatorObservedProperty implements AnnotatedConfigurable<SensorThin
 		}
 
 		String name = fillTemplate(templateName, feature, false);
-		String definition = fillTemplate(templateDefinition, feature, false);
 		String description = fillTemplate(templateDescription, feature, false);
+		String encoding = fillTemplate(templateEncoding, feature, false);
+		String metadata = fillTemplate(templateMetadata, feature, false);
 		String propertiesString = fillTemplate(templateProperties, feature, false);
 		Map<String, Object> properties = Collections.emptyMap();
 		if (!Utils.isNullOrEmpty(propertiesString)) {
 			properties = ObjectMapperFactory.get().readValue(propertiesString, JsonUtils.TYPE_MAP_STRING_OBJECT);
 		}
 
-		EntityCache<ObservedProperty> cache = caches.getCacheObservedProperties();
+		var newSensor = FrostUtils.buildSensor(name, description, encoding, metadata, properties);
+		var cache = caches.getCacheSensors();
+		var cachedSensor = cache.getCachedVersion(newSensor);
 
-		ObservedProperty newEntity = new ObservedProperty(name, definition, description);
-		newEntity.setProperties(properties);
-		ObservedProperty cachedEntity = cache.getCachedVersion(newEntity);
+		String filter = fillTemplate(templateEqualsFilter, newSensor, true);
+		LOGGER.debug("Sensor Filter: {}", filter);
+		Sensor sensor = frostUtils.findOrCreateSensor(filter, newSensor, cachedSensor);
+		cache.put(sensor);
 
-		String filter = fillTemplate(templateEqualsFilter, newEntity, true);
-		LOGGER.debug("Thing Filter: {}", filter);
-		ObservedProperty entity = frostUtils.findOrCreateOp(filter, newEntity, cachedEntity);
-		cache.put(entity);
-
-		return entity;
+		return sensor;
 	}
 
 }

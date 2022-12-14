@@ -14,7 +14,7 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-package de.fraunhofer.iosb.ilt.gjimp;
+package de.fraunhofer.iosb.ilt.gjimp.utils;
 
 import com.google.gson.JsonElement;
 import de.fraunhofer.iosb.ilt.configurable.AnnotatedConfigurable;
@@ -23,9 +23,7 @@ import de.fraunhofer.iosb.ilt.configurable.ConfigurationException;
 import de.fraunhofer.iosb.ilt.configurable.annotations.ConfigurableClass;
 import de.fraunhofer.iosb.ilt.configurable.annotations.ConfigurableField;
 import de.fraunhofer.iosb.ilt.configurable.editor.EditorBoolean;
-import de.fraunhofer.iosb.ilt.configurable.editor.EditorString;
-import de.fraunhofer.iosb.ilt.configurable.editor.EditorSubclass;
-import de.fraunhofer.iosb.ilt.gjimp.auth.AuthMethod;
+import de.fraunhofer.iosb.ilt.configurable.editor.EditorInt;
 import de.fraunhofer.iosb.ilt.sta.ServiceFailureException;
 import de.fraunhofer.iosb.ilt.sta.model.Datastream;
 import de.fraunhofer.iosb.ilt.sta.model.Entity;
@@ -34,14 +32,15 @@ import de.fraunhofer.iosb.ilt.sta.model.Observation;
 import de.fraunhofer.iosb.ilt.sta.model.ext.DataArrayDocument;
 import de.fraunhofer.iosb.ilt.sta.model.ext.DataArrayValue;
 import de.fraunhofer.iosb.ilt.sta.service.SensorThingsService;
-import java.net.MalformedURLException;
-import java.net.URL;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.ConcurrentSkipListSet;
+import java.util.concurrent.atomic.AtomicLong;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -50,25 +49,14 @@ import org.slf4j.LoggerFactory;
  * @author scf
  */
 @ConfigurableClass
-public class StaService implements AnnotatedConfigurable<SensorThingsService, Object> {
+public class ObservationUploader implements AnnotatedConfigurable<SensorThingsService, Object> {
 
 	/**
 	 * The logger for this class.
 	 */
-	private static final Logger LOGGER = LoggerFactory.getLogger(StaService.class);
+	private static final Logger LOGGER = LoggerFactory.getLogger(ObservationUploader.class);
 
-	@ConfigurableField(editor = EditorString.class,
-			label = "Service URL", description = "The url of the server to import into.")
-	@EditorString.EdOptsString(dflt = "http://localhost:8080/FROST-Server/v1.1")
-	private String serviceUrl;
-
-	@ConfigurableField(editor = EditorSubclass.class, optional = true,
-			label = "Auth Method", description = "The authentication method the service uses.")
-	@EditorSubclass.EdOptsSubclass(
-			iface = AuthMethod.class)
-	private AuthMethod authMethod;
-
-	@ConfigurableField(editor = EditorBoolean.class, optional = true,
+	@ConfigurableField(editor = EditorBoolean.class,
 			label = "Use DataArrays",
 			description = "Use the SensorThingsAPI DataArray extension to post Observations. "
 			+ "This is much more efficient when posting many observations. "
@@ -76,52 +64,62 @@ public class StaService implements AnnotatedConfigurable<SensorThingsService, Ob
 	@EditorBoolean.EdOptsBool()
 	private boolean useDataArrays;
 
+	@ConfigurableField(editor = EditorInt.class, optional = true,
+			label = "Max Batch", description = "The maximum number of items to send in a batch")
+	@EditorInt.EdOptsInt(dflt = 1_000, min = 0, max = Integer.MAX_VALUE, step = 1)
+	private int maxBatch;
+
 	private SensorThingsService service;
 	private boolean noAct = false;
 
-	private final Map<Entity, DataArrayValue> davMap = new HashMap<>();
+	private final ThreadLocal<Map<Entity, DataArrayValue>> davMaps = new ThreadLocal<>() {
+		@Override
+		protected Map<Entity, DataArrayValue> initialValue() {
+			return new HashMap<>();
+		}
+	};
+	private final Set<Entity> activeDatastreams = new ConcurrentSkipListSet<>(new EntityComparator());
 
-	private Entity lastDatastream;
+	private final AtomicLong inserted = new AtomicLong();
+	private final AtomicLong updated = new AtomicLong();
+	private final AtomicLong deleted = new AtomicLong();
+	private final AtomicLong queued = new AtomicLong();
 
-	private DataArrayValue lastDav;
-
-	private int inserted = 0;
-	private int updated = 0;
+	public ObservationUploader(SensorThingsService service, boolean useDataArrays, int maxBatch) {
+		this.useDataArrays = useDataArrays;
+		this.maxBatch = maxBatch;
+		this.service = service;
+	}
 
 	@Override
 	public void configure(JsonElement config, SensorThingsService context, Object edtCtx, ConfigEditor<?> configEditor) throws ConfigurationException {
 		AnnotatedConfigurable.super.configure(config, context, edtCtx, configEditor);
 		service = context;
-
-		try {
-			service.setEndpoint(new URL(serviceUrl));
-			if (authMethod != null) {
-				authMethod.setAuth(service);
-			}
-		} catch (MalformedURLException ex) {
-			throw new IllegalArgumentException("Failed to create service.", ex);
-		}
 	}
 
 	public void setNoAct(boolean noAct) {
 		this.noAct = noAct;
 	}
 
-	public int getInserted() {
-		return inserted;
+	public long getInserted() {
+		return inserted.get();
 	}
 
-	public int getUpdated() {
-		return updated;
+	public long getUpdated() {
+		return updated.get();
+	}
+
+	public long getDeleted() {
+		return deleted.get();
 	}
 
 	public void addObservation(Observation obs) throws ServiceFailureException {
 		if (obs.getId() != null && !noAct) {
 			service.update(obs);
-			updated++;
+			updated.incrementAndGet();
 		} else if (!useDataArrays && !noAct) {
 			service.create(obs);
-			inserted++;
+			inserted.incrementAndGet();
 		} else if (useDataArrays) {
 			addToDataArray(obs);
 		}
@@ -135,27 +133,33 @@ public class StaService implements AnnotatedConfigurable<SensorThingsService, Ob
 		if (ds == null) {
 			throw new IllegalArgumentException("Observation must have a (Multi)Datastream.");
 		}
-		if (ds != lastDatastream) {
-			findDataArrayValue(ds, o);
+		findDataArrayValue(ds, o)
+				.addObservation(o);
+		long newqueue = queued.incrementAndGet();
+		if (newqueue >= maxBatch) {
+			sendDataArray();
 		}
-		lastDav.addObservation(o);
 	}
 
-	private void findDataArrayValue(Entity ds, Observation o) {
+	private DataArrayValue findDataArrayValue(Entity ds, Observation o) {
+		final Map<Entity, DataArrayValue> davMap = davMaps.get();
 		DataArrayValue dav = davMap.get(ds);
 		if (dav == null) {
 			if (ds instanceof Datastream) {
 				dav = new DataArrayValue((Datastream) ds, getDefinedProperties(o));
+				activeDatastreams.add(ds);
 			} else {
 				dav = new DataArrayValue((MultiDatastream) ds, getDefinedProperties(o));
+				activeDatastreams.add(ds);
 			}
 			davMap.put(ds, dav);
 		}
-		lastDav = dav;
-		lastDatastream = ds;
+		return dav;
 	}
 
-	public int sendDataArray() throws ServiceFailureException {
+	public long sendDataArray() throws ServiceFailureException {
+		final Map<Entity, DataArrayValue> davMap = davMaps.get();
+		Set<Entity> sentDatastreams = davMap.keySet();
 		if (!noAct && !davMap.isEmpty()) {
 			DataArrayDocument dad = new DataArrayDocument();
 			dad.getValue().addAll(davMap.values());
@@ -168,12 +172,31 @@ public class StaService implements AnnotatedConfigurable<SensorThingsService, Ob
 				LOGGER.warn("Failed to insert {} Observations. First error: {}", error, first);
 			}
 			long nonError = locations.size() - error;
-			inserted += nonError;
+			inserted.addAndGet(nonError);
+		}
+		queued.set(0);
+		if (!sentDatastreams.isEmpty() && !activeDatastreams.removeAll(sentDatastreams)) {
+			LOGGER.error("Datastream not registered!");
 		}
 		davMap.clear();
-		lastDav = null;
-		lastDatastream = null;
-		return inserted;
+		return inserted.get();
+	}
+
+	public void delete(List<? extends Entity> entities, int threads) throws ServiceFailureException {
+		deleted.addAndGet(entities.size());
+		new FrostUtils(entities.get(0).getService()).delete(entities, threads);
+	}
+
+	/**
+	 * Check if there are Observations being cached, but not sent, for the given
+	 * (Multi)Datastream.
+	 *
+	 * @param entity The Datastream or MultiDatastream to check for.
+	 * @return true if any Thread currently holds Observations for the given
+	 * (Multi)Datastream.
+	 */
+	public boolean isActive(Entity entity) {
+		return activeDatastreams.contains(entity);
 	}
 
 	private Set<DataArrayValue.Property> getDefinedProperties(Observation o) {
@@ -195,5 +218,20 @@ public class StaService implements AnnotatedConfigurable<SensorThingsService, Ob
 			value.add(DataArrayValue.Property.ValidTime);
 		}
 		return value;
+	}
+
+	public static final class EntityComparator implements Comparator<Entity> {
+
+		public EntityComparator() {
+		}
+
+		@Override
+		public int compare(Entity o1, Entity o2) {
+			int ids = o1.getId().compareTo(o2.getId());
+			if (ids != 0) {
+				return ids;
+			}
+			return o1.getType().compareTo(o2.getType());
+		}
 	}
 }

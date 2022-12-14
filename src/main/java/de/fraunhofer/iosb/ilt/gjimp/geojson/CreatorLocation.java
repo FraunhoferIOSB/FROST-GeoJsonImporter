@@ -26,14 +26,13 @@ import de.fraunhofer.iosb.ilt.configurable.annotations.ConfigurableField;
 import de.fraunhofer.iosb.ilt.configurable.editor.EditorBoolean;
 import de.fraunhofer.iosb.ilt.configurable.editor.EditorInt;
 import de.fraunhofer.iosb.ilt.configurable.editor.EditorString;
-import static de.fraunhofer.iosb.ilt.gjimp.geojson.GeoJsonConverter.fillTemplate;
+import de.fraunhofer.iosb.ilt.gjimp.utils.Caches;
 import de.fraunhofer.iosb.ilt.gjimp.utils.EntityCache;
 import de.fraunhofer.iosb.ilt.gjimp.utils.FrostUtils;
 import static de.fraunhofer.iosb.ilt.gjimp.utils.FrostUtils.ENCODING_GEOJSON;
 import de.fraunhofer.iosb.ilt.gjimp.utils.JsonUtils;
-import de.fraunhofer.iosb.ilt.gjimp.utils.ProgressTracker;
+import static de.fraunhofer.iosb.ilt.gjimp.utils.TemplateUtils.fillTemplate;
 import de.fraunhofer.iosb.ilt.sta.ServiceFailureException;
-import de.fraunhofer.iosb.ilt.sta.Utils;
 import de.fraunhofer.iosb.ilt.sta.jackson.ObjectMapperFactory;
 import de.fraunhofer.iosb.ilt.sta.model.Location;
 import de.fraunhofer.iosb.ilt.sta.service.SensorThingsService;
@@ -91,17 +90,11 @@ public class CreatorLocation implements AnnotatedConfigurable<SensorThingsServic
 	@EditorString.EdOptsString(lines = 1, dflt = "name eq '{name|-}'")
 	private String templateEqualsFilter;
 
-	@ConfigurableField(editor = EditorString.class, optional = false,
-			label = "CacheFilter", description = "Filter used to load the cache.")
-	@EditorString.EdOptsString(lines = 1, dflt = "properties/type eq 'NUTS'")
-	private String cacheFilter;
+	@ConfigurableField(editor = EditorString.class, optional = true,
+			label = "If Not Empty", description = "Template that must result in a non-empty value for the Entity to be created, using {path.to.field|default} placeholders.")
+	@EditorString.EdOptsString(lines = 1, dflt = "")
+	private String ifNotEmptyTemplate;
 
-	@ConfigurableField(editor = EditorString.class, optional = false,
-			label = "CacheKey", description = "Template used to generate the key used to cache, using {path/to/field|default} placeholders. Template runs against the new Entity!")
-	@EditorString.EdOptsString(lines = 1, dflt = "{properties/type}-{properties/nutsId}")
-	private String templateCacheKey;
-
-	private EntityCache<String, Location> cache;
 	private SensorThingsService service;
 
 	@Override
@@ -110,9 +103,12 @@ public class CreatorLocation implements AnnotatedConfigurable<SensorThingsServic
 		service = context;
 	}
 
-	public String generateTestOutput(Feature feature) {
+	public String generateTestOutput(Feature feature, Caches caches) {
 		if (templateName.isEmpty()) {
-			return "Locations not configured.\n";
+			return "Location not configured.\n";
+		}
+		if (!ifNotEmptyTemplate.isBlank() && fillTemplate(ifNotEmptyTemplate, feature, false).isBlank()) {
+			return "Location:\n  ifNotEmpty Template is empty.\n";
 		}
 
 		String name = fillTemplate(templateName, feature, false);
@@ -142,7 +138,7 @@ public class CreatorLocation implements AnnotatedConfigurable<SensorThingsServic
 		newLocation.setProperties(properties);
 
 		String equalsFilter = fillTemplate(templateEqualsFilter, newLocation, true);
-		String cacheKey = fillTemplate(templateCacheKey, newLocation, false);
+		String cacheKey = fillTemplate(caches.getCacheLocations().getTemplateCacheKey(), newLocation, false);
 
 		StringBuilder output = new StringBuilder("Location:\n");
 		output.append("  name: ").append(name).append('\n')
@@ -151,32 +147,16 @@ public class CreatorLocation implements AnnotatedConfigurable<SensorThingsServic
 				.append("  location: ").append(locationString).append('\n')
 				.append('\n')
 				.append("  Equals Filter: ").append(equalsFilter).append('\n')
-				.append("  Cache Load Filter: ").append(cacheFilter).append('\n')
 				.append("  Cache Key: ").append(cacheKey).append('\n');
 
 		return output.toString();
 	}
 
-	public void loadCache(ProgressTracker tracker) {
+	public Location createLocation(Feature feature, FrostUtils frostUtils, Caches caches) throws JsonProcessingException, ServiceFailureException {
 		if (templateName.isEmpty()) {
-			return;
+			return null;
 		}
-		cache = new EntityCache<>(
-				entity -> fillTemplate(templateCacheKey, entity, false),
-				entity -> entity.getName());
-		try {
-			cache.load(service.locations(), cacheFilter, "id,name,description,properties,encodingType,location", "");
-		} catch (ServiceFailureException ex) {
-			LOGGER.error("Failed to load the Cache.", ex);
-		}
-	}
-
-	public EntityCache<String, Location> getCache() {
-		return cache;
-	}
-
-	public Location createLocation(Feature feature, FrostUtils frostUtils) throws JsonProcessingException, ServiceFailureException {
-		if (templateName.isEmpty()) {
+		if (!ifNotEmptyTemplate.isBlank() && fillTemplate(ifNotEmptyTemplate, feature, false).isBlank()) {
 			return null;
 		}
 
@@ -185,12 +165,12 @@ public class CreatorLocation implements AnnotatedConfigurable<SensorThingsServic
 		String propertiesString = fillTemplate(templateProperties, feature, false);
 		Map<String, Object> properties = ObjectMapperFactory.get().readValue(propertiesString, JsonUtils.TYPE_MAP_STRING_OBJECT);
 
-		String crs = fillTemplate(templateCrs, feature, false);
 		GeoJsonObject geometry = getGeometry(feature);
 		Location newLocation = new Location(name, description, ENCODING_GEOJSON, geometry);
 		newLocation.setProperties(properties);
 
-		Location cachedLocation = getCachedLocation(newLocation);
+		EntityCache<Location> cache = caches.getCacheLocations();
+		Location cachedLocation = cache.getCachedVersion(newLocation);
 
 		String filter = fillTemplate(templateEqualsFilter, newLocation, true);
 		LOGGER.debug("Location Filter: {}", filter);
@@ -206,9 +186,6 @@ public class CreatorLocation implements AnnotatedConfigurable<SensorThingsServic
 	}
 
 	private GeoJsonObject convertCrs(GeoJsonObject input, String inputCrs) {
-		if (Utils.isNullOrEmpty(inputCrs)) {
-			return input;
-		}
 		if (input instanceof Point) {
 			return FrostUtils.convertCoordinates((Point) input, inputCrs, numberScale, flipCoords);
 		} else if (input instanceof Polygon) {
@@ -220,12 +197,4 @@ public class CreatorLocation implements AnnotatedConfigurable<SensorThingsServic
 		return input;
 	}
 
-	public Location getCachedLocation(String cacheKey) {
-		return cache.get(cacheKey);
-	}
-
-	public Location getCachedLocation(Location newLocation) {
-		String cacheKey = fillTemplate(templateCacheKey, newLocation, false);
-		return cache.get(cacheKey);
-	}
 }

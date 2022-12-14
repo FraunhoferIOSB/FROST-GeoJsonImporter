@@ -50,6 +50,10 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import org.geojson.GeoJsonObject;
 import org.geojson.LngLatAlt;
 import org.geojson.MultiPolygon;
@@ -86,6 +90,11 @@ public final class FrostUtils {
 	public static final String CONTENT_TYPE_GEOJSON = ENCODING_GEOJSON;
 
 	/**
+	 * The observation type for measurements.
+	 */
+	public static final String OBS_TYPE_MEASUREMENT = "http://www.opengis.net/def/observationType/OGC-OM/2.0/OM_Measurement";
+
+	/**
 	 * The logger for this class.
 	 */
 	private static final Logger LOGGER = LoggerFactory.getLogger(FrostUtils.class);
@@ -119,6 +128,34 @@ public final class FrostUtils {
 		} else {
 			service.create(entity);
 		}
+	}
+
+	public void delete(List<? extends Entity> entities, int threads) throws ServiceFailureException {
+		if (threads <= 1) {
+			for (Entity entity : entities) {
+				service.delete(entity);
+			}
+			return;
+		}
+		ExecutorService executor = Executors.newFixedThreadPool(threads);
+		List<Future<?>> futures = new ArrayList<>();
+		for (Entity entity : entities) {
+			futures.add(executor.submit(() -> {
+				try {
+					service.delete(entity);
+				} catch (ServiceFailureException ex) {
+					LOGGER.error("Failed to delete {}", entity, ex);
+				}
+			}));
+		}
+		for (Future<?> f : futures) {
+			try {
+				f.get();
+			} catch (InterruptedException | ExecutionException ex) {
+				LOGGER.error("Maybe Failed to delete?", ex);
+			}
+		}
+		executor.shutdownNow();
 	}
 
 	public static Thing buildThing(
@@ -234,22 +271,29 @@ public final class FrostUtils {
 		return false;
 	}
 
-	public Sensor findOrCreateSensor(
-			final String filter,
+	public static Sensor buildSensor(
 			final String name,
 			final String description,
 			final String encodingType,
 			final Object metadata,
-			final Map<String, Object> properties,
-			final Sensor cached) throws ServiceFailureException {
+			final Map<String, Object> properties) {
+		final Sensor sensor = new Sensor(name, description, encodingType, metadata);
+		sensor.setProperties(properties);
+		return sensor;
+	}
+
+	public Sensor findOrCreateSensor(
+			final String filter,
+			final Sensor newSensor,
+			final Sensor cachedSensor) throws ServiceFailureException {
 		Sensor sensor = null;
-		if (cached != null) {
-			sensor = cached;
+		if (cachedSensor != null) {
+			sensor = cachedSensor;
 		} else {
 			final Query<Sensor> query = service.sensors().query();
-			final EntityList<Sensor> sensorList = addOrCreateFilter(query, filter, name).list();
+			final EntityList<Sensor> sensorList = addOrCreateFilter(query, filter, newSensor.getName()).list();
 			if (sensorList.size() > 1) {
-				throw new IllegalStateException("More than one sensor with name " + name);
+				throw new IllegalStateException("More than one sensor with name " + newSensor.getName());
 			}
 
 			if (sensorList.size() == 1) {
@@ -257,44 +301,37 @@ public final class FrostUtils {
 			}
 		}
 		if (sensor == null) {
-			LOGGER.info("Creating Sensor {}.", name);
-			sensor = new Sensor(name, description, encodingType, metadata);
-			sensor.setProperties(properties);
+			LOGGER.info("Creating Sensor {}.", newSensor.getName());
+			sensor = newSensor;
 			create(sensor);
 		} else {
-			mayeUpdateSensor(name, description, encodingType, metadata, properties, sensor);
+			mayeUpdateSensor(newSensor, sensor);
 		}
 		return sensor;
 	}
 
-	public boolean mayeUpdateSensor(
-			final String name,
-			final String description,
-			final String encodingType,
-			final Object metadata,
-			final Map<String, Object> properties,
-			final Sensor cached) throws ServiceFailureException {
+	public boolean mayeUpdateSensor(final Sensor newSensor, final Sensor cached) throws ServiceFailureException {
 		boolean update = false;
-		if (!name.equals(cached.getName())) {
+		if (!newSensor.getName().equals(cached.getName())) {
 			update = true;
-			cached.setName(name);
+			cached.setName(newSensor.getName());
 		}
-		if (!description.equals(cached.getDescription())) {
+		if (!newSensor.getDescription().equals(cached.getDescription())) {
 			update = true;
-			cached.setDescription(description);
+			cached.setDescription(newSensor.getDescription());
 		}
-		if (!encodingType.equals(cached.getEncodingType())) {
+		if (!newSensor.getEncodingType().equals(cached.getEncodingType())) {
 			update = true;
-			cached.setEncodingType(encodingType);
+			cached.setEncodingType(newSensor.getEncodingType());
 		}
-		if (!Objects.equals(metadata, cached.getMetadata())) {
+		if (!Objects.equals(newSensor.getMetadata(), cached.getMetadata())) {
 			update = true;
-			cached.setMetadata(metadata);
+			cached.setMetadata(newSensor.getMetadata());
 		}
-		if (cached.getProperties() == null && properties != null) {
-			cached.setProperties(properties);
+		if (cached.getProperties() == null && newSensor.getProperties() != null && !newSensor.getProperties().isEmpty()) {
+			cached.setProperties(newSensor.getProperties());
 			update = true;
-		} else if (addProperties(cached.getProperties(), properties, 5)) {
+		} else if (addProperties(cached.getProperties(), newSensor.getProperties(), 5)) {
 			update = true;
 		}
 		if (update) {
@@ -426,77 +463,76 @@ public final class FrostUtils {
 		return update;
 	}
 
-	public boolean maybeUpdateDatastream(
+	public static Datastream buildDatastream(
 			final String name,
 			final String desc,
 			final Map<String, Object> properties,
 			final UnitOfMeasurement uom,
+			final String obsType,
 			final Thing t,
 			final ObservedProperty op,
-			final Sensor s,
-			final Datastream cached) throws ServiceFailureException {
+			final Sensor s) {
+		Datastream ds = new Datastream(name, desc, obsType, uom);
+		ds.setProperties(properties);
+		ds.setThing(t);
+		ds.setSensor(s);
+		ds.setObservedProperty(op);
+		return ds;
+	}
+
+	public Datastream findOrCreateDatastream(final String filter, final Datastream newDatastream, final Datastream cached) throws ServiceFailureException {
+		Datastream datastream = null;
+		if (cached != null) {
+			datastream = cached;
+		} else {
+			final Query<Datastream> query = newDatastream.getThing().datastreams().query();
+			final EntityList<Datastream> datastreamList = addOrCreateFilter(query, filter, newDatastream.getName()).list();
+			if (datastreamList.size() > 1) {
+				throw new IllegalStateException("More than one datastream matches filter " + filter);
+			}
+			if (datastreamList.size() == 1) {
+				datastream = datastreamList.iterator().next();
+			}
+		}
+		if (datastream == null) {
+			LOGGER.info("Creating Datastream {}.", newDatastream.getName());
+			datastream = newDatastream;
+			create(datastream);
+		} else {
+			maybeUpdateDatastream(newDatastream, datastream);
+		}
+		return datastream;
+	}
+
+	public boolean maybeUpdateDatastream(final Datastream newDatastream, final Datastream cached) throws ServiceFailureException {
 		boolean update = false;
-		if (!name.equals(cached.getName())) {
-			update = true;
-			cached.setName(name);
-		}
-		if (!desc.equals(cached.getDescription())) {
-			update = true;
-			cached.setDescription(desc);
-		}
-		if (cached.getProperties() == null && properties != null) {
-			cached.setProperties(properties);
+		if (!newDatastream.getName().equals(cached.getName())) {
+			cached.setName(newDatastream.getName());
 			update = true;
 		}
-		if (addProperties(cached.getProperties(), properties, 5)) {
+		if (!newDatastream.getDescription().equals(cached.getDescription())) {
+			cached.setDescription(newDatastream.getDescription());
 			update = true;
 		}
-		if (!uom.equals(cached.getUnitOfMeasurement())) {
-			cached.setUnitOfMeasurement(uom);
+		if (cached.getProperties() == null && newDatastream.getProperties() != null && !newDatastream.getProperties().isEmpty()) {
+			cached.setProperties(newDatastream.getProperties());
+			update = true;
+		}
+		if (addProperties(cached.getProperties(), newDatastream.getProperties(), 5)) {
+			update = true;
+		}
+		if (!newDatastream.getUnitOfMeasurement().equals(cached.getUnitOfMeasurement())) {
+			cached.setUnitOfMeasurement(newDatastream.getUnitOfMeasurement());
+			update = true;
+		}
+		if (!cached.getObservedProperty().getId().equals(newDatastream.getObservedProperty().getId())) {
+			cached.setObservedProperty(newDatastream.getObservedProperty().withOnlyId());
 			update = true;
 		}
 		if (update) {
 			update(cached);
 		}
 		return update;
-	}
-
-	public Datastream findOrCreateDatastream(
-			final String filter,
-			final String name,
-			final String desc,
-			final Map<String, Object> properties,
-			final UnitOfMeasurement uom,
-			final Thing t,
-			final ObservedProperty op,
-			final Sensor s,
-			final Datastream cached) throws ServiceFailureException {
-		Datastream ds = null;
-		if (cached != null) {
-			ds = cached;
-		} else {
-			final Query<Datastream> query = service.datastreams().query();
-			final EntityList<Datastream> datastreamList = addOrCreateFilter(query, filter, name).list();
-			if (datastreamList.size() > 1) {
-				throw new IllegalStateException("More than one datastream matches filter " + filter);
-			}
-			if (datastreamList.size() == 1) {
-				ds = datastreamList.iterator().next();
-			}
-		}
-
-		if (ds == null) {
-			LOGGER.info("Creating Datastream {}.", name);
-			ds = new Datastream(name, desc, "http://www.opengis.net/def/observationType/OGC-OM/2.0/OM_Measurement", uom);
-			ds.setProperties(properties);
-			ds.setThing(t);
-			ds.setSensor(s);
-			ds.setObservedProperty(op);
-			create(ds);
-		} else {
-			maybeUpdateDatastream(name, desc, properties, uom, t, op, s, ds);
-		}
-		return ds;
 	}
 
 	public MultiDatastream findOrCreateMultiDatastream(
@@ -793,6 +829,10 @@ public final class FrostUtils {
 		}
 		return ZonedDateTime.of(timestamp.toLocalDateTime(), timeZone).toInstant();
 
+	}
+
+	public static Instant instantFrom(TimeObject time) {
+		return time.isInterval() ? time.getAsInterval().getStart() : time.getAsDateTime().toInstant();
 	}
 
 	public static TimeObject timeObjectFrom(final Timestamp timestamp, final ZoneId timeZone) {

@@ -38,6 +38,8 @@ public class JsonUtils {
 		// Empty on purpose.
 	};
 	public static Charset UTF_8 = Charset.forName("UTF-8");
+	private static final String[] JSON_POINTER_REPLACE = new String[]{"~", "/"};
+	private static final String[] JSON_POINTER_SEARCH = new String[]{"~0", "~1"};
 
 	/**
 	 * The logger for this class.
@@ -68,6 +70,9 @@ public class JsonUtils {
 
 	public static JsonNode walk(final JsonNode node, final String path) {
 		final String[] pathParts = path.split("/");
+		for (int i = 0; i < pathParts.length; i++) {
+			pathParts[i] = DecodeJsonPointer(pathParts[i]);
+		}
 		return walk(node, pathParts);
 	}
 
@@ -112,6 +117,6 @@ public class JsonUtils {
 	}
 
 	public static String DecodeJsonPointer(String pointer) {
-		return StringUtils.replaceEach(pointer, new String[]{"~0", "~1"}, new String[]{"~", "/"});
+		return StringUtils.replaceEach(pointer, JSON_POINTER_SEARCH, JSON_POINTER_REPLACE);
 	}
 }
