@@ -59,7 +59,7 @@ public class EntityCache<T extends Entity<T>> implements AnnotatedConfigurable<S
 
 	@ConfigurableField(editor = EditorString.class, optional = false,
 			label = "CacheKey", description = "Template used to generate the key used to cache, using {path.to.field|default} placeholders. Template runs against the new Entity!")
-	@EditorString.EdOptsString(lines = 1, dflt = "{properties/type}-{properties/nutsId}")
+	@EditorString.EdOptsString(lines = 1, dflt = "")
 	private String templateCacheKey;
 
 	private final Map<String, T> entitiesByLocalId = new LinkedHashMap<>();
@@ -83,7 +83,7 @@ public class EntityCache<T extends Entity<T>> implements AnnotatedConfigurable<S
 	@Override
 	public void configure(JsonElement config, SensorThingsService context, Object edtCtx, ConfigEditor<?> configEditor) throws ConfigurationException {
 		AnnotatedConfigurable.super.configure(config, context, edtCtx, configEditor);
-		if (de.fraunhofer.iosb.ilt.configurable.Utils.isNullOrEmpty(templateCacheKey)) {
+		if (Utils.isNullOrEmpty(templateCacheKey)) {
 			return;
 		}
 		localIdExtractor = entity -> fillTemplate(templateCacheKey, entity, false);
