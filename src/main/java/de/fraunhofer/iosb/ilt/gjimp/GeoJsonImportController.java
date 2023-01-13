@@ -34,7 +34,9 @@ import de.fraunhofer.iosb.ilt.sta.service.SensorThingsService;
 import java.io.File;
 import java.io.IOException;
 import java.net.URL;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.ResourceBundle;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -61,6 +63,9 @@ public class GeoJsonImportController implements Initializable {
 	 * The logger for this class.
 	 */
 	private static final org.slf4j.Logger LOGGER = LoggerFactory.getLogger(GeoJsonImportController.class);
+	private static final String TITLE_IMPORTER = "Importer";
+	private static final String TITLE_GEOJSON = "GeoJson";
+
 	@FXML
 	private ScrollPane paneConfig;
 	@FXML
@@ -88,13 +93,15 @@ public class GeoJsonImportController implements Initializable {
 
 	private EditorClass<SensorThingsService, Void, GeoJsonConverter> editor;
 
-	private FileChooser fileChooser = new FileChooser();
+	private final FileChooser fileChooser = new FileChooser();
 
-	private ExecutorService executor = Executors.newFixedThreadPool(1);
+	private final ExecutorService executor = Executors.newFixedThreadPool(1);
 
 	private FeatureCollection collection;
 
 	private int shownFeature = 0;
+
+	private final Map<String, File> lastUsedFiles = new HashMap<>();
 
 	@FXML
 	private void actionLoad(ActionEvent event) throws ConfigurationException {
@@ -107,7 +114,7 @@ public class GeoJsonImportController implements Initializable {
 	}
 
 	private void loadImporter() {
-		final String fileData = loadFromFile("Load Importer", null, "UTF-8");
+		final String fileData = loadFromFile(TITLE_IMPORTER, null, "UTF-8");
 		if (Utils.isNullOrEmpty(fileData)) {
 			return;
 		}
@@ -125,7 +132,7 @@ public class GeoJsonImportController implements Initializable {
 		try {
 			GeoJsonConverter converter = createConverter();
 			textAreaJson.setText("Loading File...");
-			String dataString = loadFromFile("Load GeoJson File", labelFile, converter.getCharset());
+			String dataString = loadFromFile(TITLE_GEOJSON, labelFile, converter.getCharset());
 			if (dataString == null) {
 				return;
 			}
@@ -211,11 +218,17 @@ public class GeoJsonImportController implements Initializable {
 
 	private String loadFromFile(String title, Label label, String charSet) {
 		try {
-			fileChooser.setTitle(title);
+			File lastUsedFile = lastUsedFiles.get(title);
+			if (lastUsedFile != null) {
+				fileChooser.setInitialDirectory(lastUsedFile.getParentFile());
+				fileChooser.setInitialFileName(lastUsedFile.getName());
+			}
+			fileChooser.setTitle("Load " + title);
 			File file = fileChooser.showOpenDialog(paneConfig.getScene().getWindow());
 			if (file == null) {
 				return null;
 			}
+			lastUsedFiles.put(title, file);
 			if (label != null) {
 				label.setText(file.getAbsolutePath());
 			}
@@ -263,14 +276,22 @@ public class GeoJsonImportController implements Initializable {
 
 	private void saveImporter() {
 		JsonElement json = editor.getConfig();
-		saveToFile(json, "Save Importer");
+		saveToFile(json, TITLE_IMPORTER);
 	}
 
 	private void saveToFile(JsonElement json, String title) {
 		String config = new GsonBuilder().setPrettyPrinting().create().toJson(json);
-		fileChooser.setTitle(title);
+		File lastUsedFile = lastUsedFiles.get(title);
+		if (lastUsedFile != null) {
+			fileChooser.setInitialDirectory(lastUsedFile.getParentFile());
+			fileChooser.setInitialFileName(lastUsedFile.getName());
+		}
+		fileChooser.setTitle("Save " + title);
 		File file = fileChooser.showSaveDialog(paneConfig.getScene().getWindow());
-
+		if (file == null) {
+			return;
+		}
+		lastUsedFiles.put(title, file);
 		try {
 			FileUtils.writeStringToFile(file, config, "UTF-8");
 		} catch (IOException ex) {
@@ -288,11 +309,11 @@ public class GeoJsonImportController implements Initializable {
 
 		Task<Void> task = new Task<Void>() {
 			@Override
-			protected Void call() throws Exception {
+			protected Void call() {
 				updateProgress(0, 100);
 				try {
 					runImport(this::updateProgress);
-				} catch (ConfigurationException | RuntimeException | ImportException ex) {
+				} catch (ConfigurationException | RuntimeException | ImportException | ServiceFailureException ex) {
 					LOGGER.error("Failed to import.", ex);
 				}
 				updateProgress(100, 100);
