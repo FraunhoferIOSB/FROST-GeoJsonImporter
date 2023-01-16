@@ -67,11 +67,6 @@ public class CreatorObservation implements AnnotatedConfigurable<SensorThingsSer
 	private String templateProperties;
 
 	@ConfigurableField(editor = EditorString.class, optional = false,
-			label = "EqualsFilter", description = "Template used to generate the filter to check for duplicates, using {path.to.field|default} placeholders. Template runs against the new Entity!")
-	@EditorString.EdOptsString(lines = 1, dflt = "name eq '{name|-}'")
-	private String templateEqualsFilter;
-
-	@ConfigurableField(editor = EditorString.class, optional = false,
 			label = "Datastream Key Template", description = "Template used to generate the key to find the Datastream, using {path.to.field|default} placeholders.")
 	@EditorString.EdOptsString(lines = 1, dflt = "{name}")
 	private String dsCacheTemplate;
@@ -144,14 +139,11 @@ public class CreatorObservation implements AnnotatedConfigurable<SensorThingsSer
 		}
 		observation.setParameters(parameters);
 
-		String equalsFilter = fillTemplate(templateEqualsFilter, observation, true);
-
 		StringBuilder output = new StringBuilder("Observation:\n");
 		output.append("  Result: ").append(resultString).append('\n')
 				.append("  PhenomenonTime: ").append(phenTimeString).append('\n')
 				.append("  Parameters: ").append(parametersString).append('\n')
 				.append('\n')
-				.append("  Equals Filter: ").append(equalsFilter).append('\n')
 				.append("  Datastream Cache Key: ").append(dsKey).append('\n')
 				.append("  Feature Cache Key: ").append(foiKey).append('\n');
 
