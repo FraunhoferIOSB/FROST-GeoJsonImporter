@@ -36,7 +36,7 @@
 		<slf4j-api.version>2.0.6</slf4j-api.version>
 		<logback.version>1.4.5</logback.version>
 		<maven-shade-plugin.version>3.4.1</maven-shade-plugin.version>
-		<openjfx.version>19</openjfx.version>
+		<openjfx.version>19.0.2.1</openjfx.version>
 	</properties>
 
 	<organization>
