@@ -35,7 +35,7 @@ import de.fraunhofer.iosb.ilt.gjimp.utils.JsonUtils;
 import static de.fraunhofer.iosb.ilt.gjimp.utils.TemplateUtils.fillTemplate;
 import de.fraunhofer.iosb.ilt.sta.ServiceFailureException;
 import de.fraunhofer.iosb.ilt.sta.jackson.ObjectMapperFactory;
-import de.fraunhofer.iosb.ilt.sta.model.Location;
+import de.fraunhofer.iosb.ilt.sta.model.FeatureOfInterest;
 import de.fraunhofer.iosb.ilt.sta.service.SensorThingsService;
 import java.util.Collections;
 import java.util.HashMap;
@@ -53,9 +53,9 @@ import org.slf4j.LoggerFactory;
  * @author hylke
  */
 @ConfigurableClass
-public class CreatorLocation implements AnnotatedConfigurable<SensorThingsService, Object> {
+public class CreatorFeature implements AnnotatedConfigurable<SensorThingsService, Object> {
 
-	private static final Logger LOGGER = LoggerFactory.getLogger(CreatorLocation.class.getName());
+	private static final Logger LOGGER = LoggerFactory.getLogger(CreatorFeature.class.getName());
 
 	@ConfigurableField(editor = EditorString.class, optional = true,
 			label = "Crs Template", description = "Template used to generate the crs, using {path/to/field|default} placeholders.")
@@ -107,10 +107,10 @@ public class CreatorLocation implements AnnotatedConfigurable<SensorThingsServic
 
 	public String generateTestOutput(Feature feature, Caches caches) {
 		if (templateName.isEmpty()) {
-			return "Location not configured.\n";
+			return "Feature not configured.\n";
 		}
 		if (!ifNotEmptyTemplate.isBlank() && fillTemplate(ifNotEmptyTemplate, feature, false).isBlank()) {
-			return "Location:\n  ifNotEmpty Template is empty.\n";
+			return "FeatureOfInterest:\n  ifNotEmpty Template is empty.\n";
 		}
 
 		String name = fillTemplate(templateName, feature, false);
@@ -129,24 +129,24 @@ public class CreatorLocation implements AnnotatedConfigurable<SensorThingsServic
 		}
 
 		GeoJsonObject geometry = getGeometry(feature);
-		String locationString;
+		String featureString;
 		try {
-			locationString = ObjectMapperFactory.get().writeValueAsString(geometry);
+			featureString = ObjectMapperFactory.get().writeValueAsString(geometry);
 		} catch (JsonProcessingException ex) {
-			locationString = "Failed to parse json: " + ex.getMessage();
+			featureString = "Failed to parse json: " + ex.getMessage();
 		}
 
-		Location newLocation = new Location(name, description, ENCODING_GEOJSON, geometry);
-		newLocation.setProperties(properties);
+		FeatureOfInterest newFoi = new FeatureOfInterest(name, description, ENCODING_GEOJSON, geometry);
+		newFoi.setProperties(properties);
 
-		String equalsFilter = fillTemplate(templateEqualsFilter, newLocation, true);
-		String cacheKey = fillTemplate(caches.getCacheLocations().getTemplateCacheKey(), newLocation, false);
+		String equalsFilter = fillTemplate(templateEqualsFilter, newFoi, true);
+		String cacheKey = fillTemplate(caches.getCacheFeatures().getTemplateCacheKey(), newFoi, false);
 
-		StringBuilder output = new StringBuilder("Location:\n");
+		StringBuilder output = new StringBuilder("Feature:\n");
 		output.append("  name: ").append(name).append('\n')
 				.append("  description: ").append(description).append('\n')
 				.append("  properties: ").append(propertiesString).append('\n')
-				.append("  location: ").append(locationString).append('\n')
+				.append("  feature: ").append(featureString).append('\n')
 				.append('\n')
 				.append("  Equals Filter: ").append(equalsFilter).append('\n')
 				.append("  Cache Key: ").append(cacheKey).append('\n');
@@ -154,7 +154,7 @@ public class CreatorLocation implements AnnotatedConfigurable<SensorThingsServic
 		return output.toString();
 	}
 
-	public Location createLocation(Feature feature, FrostUtils frostUtils, Caches caches) throws JsonProcessingException, ServiceFailureException {
+	public FeatureOfInterest createFeatureOfInterest(Feature feature, FrostUtils frostUtils, Caches caches) throws JsonProcessingException, ServiceFailureException {
 		if (templateName.isEmpty()) {
 			return null;
 		}
@@ -171,18 +171,18 @@ public class CreatorLocation implements AnnotatedConfigurable<SensorThingsServic
 		}
 
 		GeoJsonObject geometry = getGeometry(feature);
-		Location newLocation = new Location(name, description, ENCODING_GEOJSON, geometry);
-		newLocation.setProperties(properties);
+		FeatureOfInterest newFoi = new FeatureOfInterest(name, description, ENCODING_GEOJSON, geometry);
+		newFoi.setProperties(properties);
 
-		EntityCache<Location> cache = caches.getCacheLocations();
-		Location cachedLocation = cache.getCachedVersion(newLocation);
+		EntityCache<FeatureOfInterest> cache = caches.getCacheFeatures();
+		FeatureOfInterest cachedFoI = cache.getCachedVersion(newFoi);
 
-		String filter = fillTemplate(templateEqualsFilter, newLocation, true);
-		LOGGER.debug("Location Filter: {}", filter);
-		Location location = frostUtils.findOrCreateLocation(filter, newLocation, cachedLocation);
-		cache.put(location);
+		String filter = fillTemplate(templateEqualsFilter, newFoi, true);
+		LOGGER.debug("FeatureOfInterest Filter: {}", filter);
+		FeatureOfInterest foi = frostUtils.findOrCreateFeature(filter, newFoi, cachedFoI);
+		cache.put(foi);
 
-		return location;
+		return foi;
 	}
 
 	private GeoJsonObject getGeometry(Feature feature) {

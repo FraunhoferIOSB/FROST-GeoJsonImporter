@@ -347,65 +347,71 @@ public final class FrostUtils {
 			final GeoJsonObject geoJson,
 			final Map<String, Object> properties,
 			final FeatureOfInterest cached) throws ServiceFailureException {
+		FeatureOfInterest foi = new FeatureOfInterest(name, description, CONTENT_TYPE_GEOJSON, geoJson);
+		foi.setProperties(properties);
+		return findOrCreateFeature(filter, foi, cached);
+	}
+
+	public FeatureOfInterest findOrCreateFeature(
+			final String filter,
+			final FeatureOfInterest newFoi,
+			final FeatureOfInterest cached) throws ServiceFailureException {
+
 		FeatureOfInterest foi = null;
 		if (cached != null) {
 			foi = cached;
 		} else {
 			final Query<FeatureOfInterest> query = service.featuresOfInterest().query();
-			final EntityList<FeatureOfInterest> foiList = addOrCreateFilter(query, filter, name).list();
+			final EntityList<FeatureOfInterest> foiList = addOrCreateFilter(query, filter, newFoi.getName()).list();
 			if (foiList.size() > 1) {
-				throw new IllegalStateException("More than one FeatureOfInterest with name " + name);
+				throw new IllegalStateException("More than one FeatureOfInterest with name " + newFoi.getName());
 			}
 			if (foiList.size() == 1) {
 				foi = foiList.iterator().next();
 			}
 		}
 		if (foi == null) {
-			LOGGER.info("Creating Feature {}.", name);
-			foi = new FeatureOfInterest(name, description, CONTENT_TYPE_GEOJSON, geoJson);
-			foi.setProperties(properties);
+			LOGGER.info("Creating Feature {}.", newFoi.getName());
+			foi = newFoi;
 			create(foi);
 		} else {
-			maybeUpdateFeatureOfInterest(name, description, geoJson, properties, foi);
+			maybeUpdateFeatureOfInterest(newFoi, foi);
 		}
 		return foi;
 	}
 
 	public boolean maybeUpdateFeatureOfInterest(
-			final String name,
-			final String description,
-			final GeoJsonObject geoJson,
-			final Map<String, Object> properties,
-			final FeatureOfInterest cached) throws ServiceFailureException {
+			final FeatureOfInterest newFeature,
+			final FeatureOfInterest foiToUpdate) throws ServiceFailureException {
 		boolean update = false;
-		if (!name.equals(cached.getName())) {
+		if (!newFeature.getName().equals(foiToUpdate.getName())) {
 			update = true;
-			cached.setName(name);
+			foiToUpdate.setName(newFeature.getName());
 		}
-		if (!description.equals(cached.getDescription())) {
+		if (!newFeature.getDescription().equals(foiToUpdate.getDescription())) {
 			update = true;
-			cached.setDescription(description);
+			foiToUpdate.setDescription(newFeature.getDescription());
 		}
 		ObjectMapper om = ObjectMapperFactory.get();
 		try {
-			if (!om.writeValueAsString(geoJson).equals(om.writeValueAsString(cached.getFeature()))) {
+			if (!om.writeValueAsString(newFeature.getFeature()).equals(om.writeValueAsString(foiToUpdate.getFeature()))) {
 				update = true;
-				LOGGER.debug("Location changed from {} to {}", cached.getFeature(), geoJson);
-				cached.setFeature(geoJson);
+				LOGGER.debug("feature changed from {} to {}", foiToUpdate.getFeature(), newFeature.getFeature());
+				foiToUpdate.setFeature(newFeature.getFeature());
 			}
 		} catch (JsonProcessingException ex) {
 			LOGGER.error("Failed to compare geoJson objects.");
 		}
 
-		if (cached.getProperties() == null && properties != null) {
-			cached.setProperties(properties);
+		if (foiToUpdate.getProperties() == null && newFeature.getProperties() != null) {
+			foiToUpdate.setProperties(newFeature.getProperties());
 			update = true;
 		}
-		if (addProperties(cached.getProperties(), properties, 5)) {
+		if (addProperties(foiToUpdate.getProperties(), newFeature.getProperties(), 5)) {
 			update = true;
 		}
 		if (update) {
-			update(cached);
+			update(foiToUpdate);
 		}
 		return update;
 	}

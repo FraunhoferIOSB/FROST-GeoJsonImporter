@@ -75,6 +75,11 @@ public class GeoJsonConverter implements AnnotatedConfigurable<SensorThingsServi
 	private CreatorLocation creatorLocations;
 
 	@ConfigurableField(editor = EditorClass.class, optional = true,
+			label = "FeaturesOfInterest", description = "The definition of how to create FeaturesOfInterest.")
+	@EditorClass.EdOptsClass(clazz = CreatorFeature.class)
+	private CreatorFeature creatorFeatures;
+
+	@ConfigurableField(editor = EditorClass.class, optional = true,
 			label = "Things", description = "The definition of how to create Things.")
 	@EditorClass.EdOptsClass(clazz = CreatorThing.class)
 	private CreatorThing creatorThings;
@@ -135,7 +140,9 @@ public class GeoJsonConverter implements AnnotatedConfigurable<SensorThingsServi
 		final StringBuilder output = new StringBuilder()
 				.append(creatorLocations.generateTestOutput(feature, caches))
 				.append('\n')
-				.append(creatorThings.generateTestOutput(feature, caches));
+				.append(creatorThings.generateTestOutput(feature, caches))
+				.append('\n')
+				.append(creatorFeatures.generateTestOutput(feature, caches));
 		for (var cr : creatorObservedProperties) {
 			output.append('\n').append(cr.generateTestOutput(feature, caches));
 		}
@@ -204,6 +211,7 @@ public class GeoJsonConverter implements AnnotatedConfigurable<SensorThingsServi
 	public void importFeature(Feature feature, List<Observation> obs) throws JsonProcessingException, ServiceFailureException, ImportException {
 		Location location = creatorLocations.createLocation(feature, frostUtils, caches);
 		creatorThings.createThing(feature, location, frostUtils, caches);
+		creatorFeatures.createFeatureOfInterest(feature, frostUtils, caches);
 		for (var cop : creatorObservedProperties) {
 			if (!cop.isEvaluatedOnce()) {
 				cop.createObservedProperty(feature, frostUtils, caches);
