@@ -59,12 +59,13 @@ import org.geojson.LngLatAlt;
 import org.geojson.MultiPolygon;
 import org.geojson.Point;
 import org.geojson.Polygon;
-import org.geotools.geometry.DirectPosition2D;
+import org.geotools.api.geometry.MismatchedDimensionException;
+import org.geotools.api.referencing.FactoryException;
+import org.geotools.api.referencing.crs.CoordinateReferenceSystem;
+import org.geotools.api.referencing.operation.MathTransform;
+import org.geotools.api.referencing.operation.TransformException;
+import org.geotools.geometry.Position2D;
 import org.geotools.referencing.CRS;
-import org.opengis.geometry.MismatchedDimensionException;
-import org.opengis.referencing.FactoryException;
-import org.opengis.referencing.crs.CoordinateReferenceSystem;
-import org.opengis.referencing.operation.MathTransform;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.threeten.extra.Interval;
@@ -988,13 +989,13 @@ public final class FrostUtils {
 			final CoordinateReferenceSystem sourceCrs = CRS.decode(fullCrs);
 			final CoordinateReferenceSystem targetCrs = CRS.decode("EPSG:4326");
 			final MathTransform transform = CRS.findMathTransform(sourceCrs, targetCrs);
-			final DirectPosition2D sourcePoint = new DirectPosition2D(sourceCrs, first, second);
-			final DirectPosition2D targetPoint = new DirectPosition2D(targetCrs);
+			final Position2D sourcePoint = new Position2D(sourceCrs, first, second);
+			final Position2D targetPoint = new Position2D(targetCrs);
 			transform.transform(sourcePoint, targetPoint);
 			return new LngLatAlt(
 					new BigDecimal(targetPoint.y).setScale(numberScale, RoundingMode.HALF_EVEN).doubleValue(),
 					new BigDecimal(targetPoint.x).setScale(numberScale, RoundingMode.HALF_EVEN).doubleValue());
-		} catch (FactoryException | MismatchedDimensionException | org.opengis.referencing.operation.TransformException exc) {
+		} catch (MismatchedDimensionException | FactoryException | TransformException exc) {
 			throw new RuntimeException("Failed to convert coordinates", exc);
 		}
 	}
